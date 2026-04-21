@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Easy4You · Admin</title>
+    <link rel="stylesheet" th:href="@{/css/admin.css}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Easy4You · Admin</div>
+      <nav class="menu">
+        <a th:href="@{/admin}" th:classappend="${nav == 'dashboard'} ? ' active' : ''">Dashboard</a>
+        <a th:href="@{/admin/usuarios}" th:classappend="${nav == 'usuarios'} ? ' active' : ''">Usuarios</a>
+        <a th:href="@{/admin/asignaturas}" th:classappend="${nav == 'asignaturas'} ? ' active' : ''">Asignaturas</a>
+        <form th:action="@{/logout}" method="post" class="inline">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+          <button type="submit" class="link-btn">Salir</button>
+        </form>
+      </nav>
+    </header>
+
+    <main class="container">
+      <h1>Dashboard</h1>
+      <p class="muted">Resumen rápido del sistema.</p>
+
+      <section class="stat-grid">
+        <div class="card stat-card">
+          <div class="stat-number" th:text="${totalUsuarios}">0</div>
+          <div class="stat-label">Usuarios</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-number" th:text="${totalAsignaturas}">0</div>
+          <div class="stat-label">Asignaturas</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-number" th:text="${totalDocumentos}">0</div>
+          <div class="stat-label">Documentos</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

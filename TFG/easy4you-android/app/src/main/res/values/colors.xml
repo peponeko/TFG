@@ -1,0 +1,12 @@
+<resources>
+  <color name="e4y_primary">#2F80ED</color>
+  <color name="e4y_primary_dark">#1C5DB7</color>
+  <color name="e4y_accent">#56CCF2</color>
+
+  <color name="e4y_bg">#F7F9FC</color>
+  <color name="e4y_surface">#FFFFFF</color>
+  <color name="e4y_text">#1F2937</color>
+  <color name="e4y_text_muted">#6B7280</color>
+  <color name="e4y_divider">#E5E7EB</color>
+</resources>
+
