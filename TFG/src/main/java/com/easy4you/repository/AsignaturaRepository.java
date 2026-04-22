@@ -9,4 +9,8 @@ public interface AsignaturaRepository extends JpaRepository<Asignatura, Long> {
   Optional<Asignatura> findByIdAndUsuarioId(Long id, Long usuarioId);
 
   List<Asignatura> findByUsuarioIdOrderByNombreAsc(Long usuarioId);
+
+  List<Asignatura> findByUsuarioIdAndTrimestreOrderByNombreAsc(Long usuarioId, Integer trimestre);
+
+  List<Asignatura> findByUsuarioIdAndTrimestreIsNullOrderByNombreAsc(Long usuarioId);
 }

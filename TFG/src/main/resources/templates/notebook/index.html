@@ -2,93 +2,47 @@
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Notebooks · Easy4You" />
     <title>Notebooks · Easy4You</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                400: "#7C5CFF",
-                500: "#6D4CFF",
-                600: "#5B3FFF",
-              },
-            },
-          },
-        },
-      };
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-
     <link rel="stylesheet" th:href="@{/css/app.css}" />
     <script th:src="@{/js/app.js}" defer></script>
   </head>
-
-  <body data-page="notebook-index" class="min-h-screen bg-slate-950 text-slate-100">
-    <header class="border-b border-slate-800 bg-slate-950/60 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <a href="/app/notebooks" class="flex items-center gap-2 font-semibold tracking-tight">
-          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600/20 text-brand-400"
-            >E</span
-          >
-          <span>Easy4You</span>
-        </a>
-        <nav class="flex items-center gap-2">
-          <a href="/app/notas" class="rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-900/60">Notas</a>
-          <button
-            id="logout-btn"
-            class="rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2 text-sm font-medium text-slate-200 hover:border-brand-500"
-          >
-            Salir
-          </button>
+  <body data-page="notebook-index" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <a href="/app/home" class="apple-logo">Easy4You</a>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
         </nav>
       </div>
     </header>
-
-    <main class="mx-auto max-w-6xl px-4 py-8">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Tus notebooks</h1>
-          <p class="mt-1 text-sm text-slate-400">
-            Un notebook es una asignatura. Sube fuentes y chatea con ellas.
-          </p>
-        </div>
-        <button
-          id="open-create-notebook"
-          class="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500"
-        >
-          Nuevo notebook
-        </button>
+    <main class="apple-container">
+      <section class="apple-hero">
+        <h1 class="apple-hero-title" style="font-size: 36px">Tus notebooks</h1>
+        <p class="apple-hero-subtitle">Sube fuentes, chatea con IA y genera material de estudio.</p>
+      </section>
+      <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+        <button id="open-create-notebook" class="apple-btn-primary">Nuevo notebook</button>
       </div>
-
-      <section class="mt-8">
-        <div id="notebooks-list" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
-        <div id="notebooks-empty" class="mt-10 hidden rounded-2xl border border-slate-800 bg-slate-900/30 p-10">
-          <h2 class="text-lg font-semibold">Aún no tienes notebooks</h2>
-          <p class="mt-2 text-sm text-slate-400">
-            Crea uno para empezar a subir PDFs, DOCX o ZIPs y generar resúmenes, flashcards y tests.
-          </p>
+      <section style="margin-top: 24px; border-top: 1px solid var(--apple-separator); padding-top: 16px;">
+        <div id="notebooks-list" class="apple-grid"></div>
+        <div id="notebooks-empty" class="apple-card hidden" style="padding: 24px; margin-top: 16px;">
+          <h2 style="margin: 0; font-size: 18px;">Aún no tienes notebooks</h2>
+          <p style="margin: 8px 0 0; color: var(--apple-text-secondary);">Crea uno para empezar.</p>
         </div>
       </section>
-
-      <section class="mt-10">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Compartidos conmigo</h2>
-        <div id="shared-list" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
-        <p id="shared-empty" class="mt-4 hidden text-sm text-slate-500">
-          Nadie te ha compartido notebooks todavía.
-        </p>
+      <section style="margin-top: 28px;">
+        <h2 style="font-size: 13px; color: var(--apple-text-secondary); text-transform: uppercase; letter-spacing: 0.08em;">Compartidos conmigo</h2>
+        <div id="shared-list" class="apple-grid" style="margin-top: 12px;"></div>
+        <p id="shared-empty" class="hidden" style="margin-top: 12px; color: var(--apple-text-secondary);">Nadie te ha compartido notebooks todavía.</p>
       </section>
     </main>
-
     <div id="modal-root" class="hidden"></div>
     <div id="toast-root"></div>
   </body>

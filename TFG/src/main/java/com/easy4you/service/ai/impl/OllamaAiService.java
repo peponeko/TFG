@@ -4,10 +4,13 @@ import com.easy4you.config.AiProperties;
 import com.easy4you.exception.ServiceUnavailableException;
 import com.easy4you.service.ai.AiService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,9 +27,14 @@ public class OllamaAiService implements AiService {
 
   private static final Logger log = LoggerFactory.getLogger(OllamaAiService.class);
 
-  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
-  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(90);
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
   private static final Duration HEALTHCHECK_TIMEOUT = Duration.ofSeconds(1);
+
+  private static final String MSG_IA_NO_DISPONIBLE =
+      "La IA local no está disponible. Ejecuta: ollama run tinyllama";
+  private static final String MSG_IA_RESPUESTA_INVALIDA =
+      "La IA no devolvió una respuesta válida. Inténtalo de nuevo.";
 
   private final AiProperties aiProperties;
   private final ObjectMapper objectMapper;
@@ -38,12 +46,6 @@ public class OllamaAiService implements AiService {
   public String generarRespuesta(String prompt, int maxTokens) {
     if (prompt == null || prompt.isBlank()) {
       return "";
-    }
-
-    if (!isDisponible()) {
-      throw new ServiceUnavailableException(
-          "IA no disponible (Ollama). Instala Ollama y arranca el servidor en "
-              + aiProperties.getOllama().getBaseUrl());
     }
 
     String url = buildUrl("/api/generate");
@@ -84,18 +86,39 @@ public class OllamaAiService implements AiService {
             "Error llamando a la IA (Ollama): HTTP " + response.statusCode() + " - " + safeBody(response.body()));
       }
 
-      OllamaGenerateResponse parsed = objectMapper.readValue(response.body(), OllamaGenerateResponse.class);
-      if (parsed == null || parsed.response() == null) {
-        log.warn("Ollama devolvió respuesta vacía");
-        return "";
+      String raw = response.body();
+      if (raw == null || raw.isBlank()) {
+        log.error("Ollama devolvió body vacío (status={})", response.statusCode());
+        throw new ServiceUnavailableException(MSG_IA_RESPUESTA_INVALIDA);
       }
-      
-      String result = parsed.response().trim();
-      log.info("Ollama generación completada, longitud: {}", result.length());
-      return result;
+
+      OllamaGenerateResponse parsed;
+      try {
+        parsed = objectMapper.readValue(raw, OllamaGenerateResponse.class);
+      } catch (Exception ex) {
+        log.error("Ollama devolvió JSON inválido: {}", safeBody(raw), ex);
+        throw new ServiceUnavailableException(MSG_IA_RESPUESTA_INVALIDA);
+      }
+
+      String result = parsed == null ? null : parsed.response();
+      if (result == null || result.isBlank()) {
+        log.error("Ollama devolvió JSON sin 'response' (o vacío): {}", safeBody(raw));
+        throw new ServiceUnavailableException(MSG_IA_RESPUESTA_INVALIDA);
+      }
+
+      String trimmed = result.trim();
+      log.info("Ollama generación completada, longitud: {}", trimmed.length());
+      return trimmed;
     } catch (ServiceUnavailableException ex) {
       throw ex;
+    } catch (HttpTimeoutException | ConnectException ex) {
+      log.error("Ollama no responde (timeout/connection refused): {}", ex.getMessage(), ex);
+      throw new ServiceUnavailableException(MSG_IA_NO_DISPONIBLE);
     } catch (Exception ex) {
+      if (isConnectionRefusedOrTimeout(ex)) {
+        log.error("Ollama no responde (timeout/connection refused): {}", ex.getMessage(), ex);
+        throw new ServiceUnavailableException(MSG_IA_NO_DISPONIBLE);
+      }
       log.error("Excepción llamando a Ollama: {}", ex.getMessage(), ex);
       throw new ServiceUnavailableException("No se ha podido llamar a la IA (Ollama): " + ex.getMessage());
     }
@@ -150,6 +173,18 @@ public class OllamaAiService implements AiService {
     return trimmed.substring(0, 240) + "…";
   }
 
+  private boolean isConnectionRefusedOrTimeout(Throwable ex) {
+    Throwable t = ex;
+    while (t != null) {
+      if (t instanceof HttpConnectTimeoutException
+          || t instanceof HttpTimeoutException
+          || t instanceof ConnectException) {
+        return true;
+      }
+      t = t.getCause();
+    }
+    return false;
+  }
+
   private record OllamaGenerateResponse(String response) {}
 }
-

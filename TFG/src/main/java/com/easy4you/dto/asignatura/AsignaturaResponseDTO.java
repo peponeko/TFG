@@ -16,6 +16,7 @@ public class AsignaturaResponseDTO {
   private String nombre;
   private String descripcion;
   private String colorHex;
+  private Integer trimestre;
   private LocalDateTime createdAt;
   private LocalDateTime updatedAt;
 }

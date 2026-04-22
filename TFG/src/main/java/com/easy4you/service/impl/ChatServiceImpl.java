@@ -57,6 +57,8 @@ public class ChatServiceImpl implements ChatService {
 
   private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
 
+  private static final int MAX_INPUT_CHARS_CHAT = 10_000;
+
   private static final int KEYWORD_MAX = 6;
   private static final int CHUNKS_PER_KEYWORD = 50;
   private static final int HISTORY_MAX_MESSAGES = 10;
@@ -270,23 +272,18 @@ public class ChatServiceImpl implements ChatService {
     if (chunks.isEmpty()) {
       assistantContent = "No encuentro información sobre esto en los documentos proporcionados";
     } else {
-      if (!aiService.isDisponible()) {
-        throw new ServiceUnavailableException(
-            "IA no disponible. Para usar el chat instala Ollama y arráncalo en "
-                + aiProperties.getOllama().getBaseUrl());
-      }
-
       String chunksText = buildChunksContext(chunks);
       String historyText = buildRecentHistory(conversacionId);
       String contexto = chunksText;
       if (!historyText.isBlank()) {
         contexto += "\n\nHISTORIAL RECIENTE (no es fuente, solo contexto conversacional):\n" + historyText;
       }
+      contexto = truncate(contexto, MAX_INPUT_CHARS_CHAT);
 
       String prompt = PromptTemplates.formatChat(contexto, contenido);
       assistantContent = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensChat());
       if (assistantContent == null || assistantContent.isBlank()) {
-        assistantContent = "No encuentro información sobre esto en los documentos proporcionados";
+        throw new ServiceUnavailableException("La IA no devolvió una respuesta válida. Inténtalo de nuevo.");
       }
     }
 
@@ -662,6 +659,17 @@ public class ChatServiceImpl implements ChatService {
     }
   }
 
+  private String truncate(String text, int maxChars) {
+    if (text == null) {
+      return "";
+    }
+    String t = text.trim();
+    if (t.length() <= maxChars) {
+      return t;
+    }
+    return t.substring(0, Math.max(0, maxChars - 1)).trim() + "…";
+  }
+
   private ChatSource toSource(DocumentoChunk chunk) {
     if (chunk == null || chunk.getId() == null) {
       return null;
@@ -686,4 +694,3 @@ public class ChatServiceImpl implements ChatService {
     }
   }
 }
-

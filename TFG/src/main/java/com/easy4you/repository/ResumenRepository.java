@@ -10,4 +10,6 @@ public interface ResumenRepository extends JpaRepository<Resumen, Long> {
   List<Resumen> findByTemaIdOrderByCreatedAtDesc(Long temaId);
 
   List<Resumen> findByDocumentoIdInOrderByCreatedAtDesc(List<Long> documentoIds);
+
+  long countByDocumentoId(Long documentoId);
 }

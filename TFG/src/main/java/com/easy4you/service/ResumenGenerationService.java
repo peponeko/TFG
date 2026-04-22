@@ -6,6 +6,10 @@ import com.easy4you.model.entity.Resumen;
 public interface ResumenGenerationService {
   Resumen generarResumenDocumento(Long usuarioId, Long documentoId);
 
+  void solicitarResumenDocumento(Long usuarioId, Long documentoId);
+
+  void generarResumenDocumentoAsync(Long usuarioId, Long documentoId);
+
   Resumen generarResumenTema(Long usuarioId, Long temaId);
 
   /**
@@ -13,4 +17,3 @@ public interface ResumenGenerationService {
    */
   ArtefactoGenerado generarResumenConArtefacto(Long usuarioId, Long documentoId);
 }
-

@@ -47,6 +47,7 @@ public class AsignaturaServiceImpl implements AsignaturaService {
     existente.setNombre(datos.getNombre());
     existente.setDescripcion(datos.getDescripcion());
     existente.setColorHex(datos.getColorHex());
+    existente.setTrimestre(datos.getTrimestre());
     return asignaturaRepository.save(existente);
   }
 

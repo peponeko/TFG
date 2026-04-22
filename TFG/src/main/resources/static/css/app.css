@@ -1,3 +1,5 @@
+@import url("apple-theme.css");
+
 :root {
   color-scheme: dark;
 }
@@ -32,4 +34,3 @@ body {
   background: rgba(148, 163, 184, 0.18);
   border-radius: 10px;
 }
-

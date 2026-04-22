@@ -6,54 +6,49 @@ public final class PromptTemplates {
 
   public static final String RESUMEN =
       """
-Eres un asistente académico experto. Basándote ÚNICAMENTE en el siguiente texto,
-genera un resumen estructurado con: 1) Idea principal, 2) Puntos clave (máximo 5),
-3) Conceptos importantes. No añadas información externa.
+Resume SOLO el texto dado (sin inventar). Responde en español.
+Formato:
+- Idea principal:
+- Puntos clave (máx 5):
+- Conceptos importantes:
 
-TEXTO:
+Texto:
 {texto}
-
-Responde en español. Sé conciso y preciso.
 """;
 
   public static final String FLASHCARDS =
       """
-Basándote ÚNICAMENTE en el siguiente texto académico, genera exactamente {n} flashcards
-de estudio. Cada flashcard debe tener una pregunta clara y una respuesta concisa.
-Devuelve SOLO un JSON array con el formato:
-[{"pregunta": "...", "respuesta": "...", "dificultad": "BASICA|INTERMEDIA|AVANZADA"}]
+Genera exactamente {n} flashcards basándote SOLO en el texto.
+Devuelve SOLO un JSON array válido (sin markdown ni texto extra).
+Ejemplo:
+[{"pregunta":"...","respuesta":"...","dificultad":"BASICA|INTERMEDIA|AVANZADA"}]
 
-TEXTO:
+Texto:
 {texto}
 """;
 
   public static final String PREGUNTAS_TEST =
       """
-Basándote ÚNICAMENTE en el siguiente texto académico, genera exactamente {n} preguntas
-de test de opción múltiple. Devuelve SOLO un JSON array con el formato:
-[{"pregunta": "...", "opciones": ["a)...", "b)...", "c)...", "d)..."],
-  "respuestaCorrecta": "a", "explicacion": "..."}]
+Genera exactamente {n} preguntas tipo test basándote SOLO en el texto.
+Devuelve SOLO un JSON array válido (sin markdown ni texto extra).
+Ejemplo:
+[{"pregunta":"...","opciones":["a) ...","b) ...","c) ...","d) ..."],"respuestaCorrecta":"a","explicacion":"..."}]
 
-TEXTO:
+Texto:
 {texto}
 """;
 
   public static final String CHAT =
       """
-Eres un asistente de estudio académico. Tu función es responder preguntas
-basándote EXCLUSIVAMENTE en los fragmentos de documentos proporcionados.
+Responde basándote SOLO en los fragmentos. Responde en español.
+Si no está en los fragmentos, di exactamente:
+"No encuentro información sobre esto en los documentos proporcionados"
+Incluye citas con el formato: [Doc: {nombre}, Fragmento {n}]
 
-REGLAS ESTRICTAS:
-- Responde SOLO con información de los fragmentos dados
-- Si la respuesta no está en los fragmentos, di: "No encuentro información sobre esto en los documentos proporcionados"
-- Cita siempre el documento y fragmento de origen usando el formato [Doc: {nombre}, Fragmento {n}]
-- No inventes ni añadas información externa
-- Responde en español
-
-FRAGMENTOS DE DOCUMENTOS:
+Fragmentos:
 {chunks}
 
-PREGUNTA:
+Pregunta:
 {pregunta}
 """;
 
@@ -77,4 +72,3 @@ PREGUNTA:
     return s == null ? "" : s;
   }
 }
-

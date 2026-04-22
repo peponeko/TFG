@@ -2,6 +2,7 @@ package com.easy4you.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -22,6 +23,8 @@ public class JwtFilter extends OncePerRequestFilter {
   private final JwtUtil jwtUtil;
   private final UserDetailsService userDetailsService;
 
+  private static final String COOKIE_TOKEN = "easy4you_token";
+
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
     String path = request.getRequestURI();
@@ -33,13 +36,11 @@ public class JwtFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
 
-    String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    String token = resolveToken(request);
+    if (token == null || token.isBlank()) {
       filterChain.doFilter(request, response);
       return;
     }
-
-    String token = authHeader.substring(7);
     String email;
     try {
       email = jwtUtil.extractUsername(token);
@@ -61,5 +62,25 @@ public class JwtFilter extends OncePerRequestFilter {
 
     filterChain.doFilter(request, response);
   }
-}
 
+  private String resolveToken(HttpServletRequest request) {
+    String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+      return authHeader.substring(7);
+    }
+
+    Cookie[] cookies = request.getCookies();
+    if (cookies == null) {
+      return null;
+    }
+
+    for (Cookie c : cookies) {
+      if (c != null && COOKIE_TOKEN.equals(c.getName())) {
+        String value = c.getValue();
+        return value == null || value.isBlank() ? null : value.trim();
+      }
+    }
+
+    return null;
+  }
+}

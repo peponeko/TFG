@@ -1,5 +1,6 @@
 package com.easy4you.controller.api;
 
+import com.easy4you.dto.tema.TemaRapidoRequestDTO;
 import com.easy4you.dto.tema.TemaRequestDTO;
 import com.easy4you.dto.tema.TemaResponseDTO;
 import com.easy4you.exception.BadRequestException;
@@ -21,6 +22,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -91,6 +93,40 @@ public class TemaController {
     tema.setTitulo(request.getTitulo());
     tema.setDescripcion(request.getDescripcion());
     tema.setOrden(request.getOrden() != null ? request.getOrden() : 0);
+    tema.setPalabrasClave(request.getPalabrasClave());
+
+    Tema creado = temaService.crear(tema);
+    return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(creado));
+  }
+
+  @PostMapping("/rapido")
+  @Transactional
+  public ResponseEntity<TemaResponseDTO> crearRapido(@Valid @RequestBody TemaRapidoRequestDTO request) {
+    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
+
+    if (request.getAsignaturaId() == null) {
+      throw new BadRequestException("asignaturaId es obligatorio");
+    }
+
+    Integer trimestre = request.getTrimestre();
+    if (trimestre != null && !(trimestre == 0 || trimestre == 1 || trimestre == 2 || trimestre == 3)) {
+      throw new BadRequestException("trimestre inválido. Usa 1, 2, 3 o 0/null");
+    }
+
+    Asignatura asignatura =
+        asignaturaRepository
+            .findByIdAndUsuarioId(request.getAsignaturaId(), usuarioActual.getId())
+            .orElseThrow(
+                () -> new NotFoundException("Asignatura no encontrada: " + request.getAsignaturaId()));
+
+    ResultadoAprendizaje ra = resolveResultadoAprendizajeTrimestre(asignatura, trimestre);
+    Unidad unidad = resolveUnidadPrincipal(ra);
+
+    Tema tema = new Tema();
+    tema.setUnidad(unidad);
+    tema.setTitulo(request.getTitulo());
+    tema.setDescripcion(request.getDescripcion());
+    tema.setOrden(0);
     tema.setPalabrasClave(request.getPalabrasClave());
 
     Tema creado = temaService.crear(tema);
@@ -191,6 +227,58 @@ public class TemaController {
     unidad.setDescripcion("Unidad por defecto (creada automáticamente)");
     unidad.setOrden(0);
     return unidadRepository.save(unidad);
+  }
+
+  private ResultadoAprendizaje resolveResultadoAprendizajeTrimestre(Asignatura asignatura, Integer trimestre) {
+    if (asignatura == null || asignatura.getId() == null) {
+      throw new BadRequestException("Asignatura inválida");
+    }
+
+    if (trimestre == null || trimestre == 0) {
+      return resultadoAprendizajeRepository
+          .findTopByAsignaturaIdAndCodigoIgnoreCaseOrderByIdAsc(asignatura.getId(), "GEN")
+          .orElseGet(
+              () -> {
+                ResultadoAprendizaje nuevo = new ResultadoAprendizaje();
+                nuevo.setAsignatura(asignatura);
+                nuevo.setCodigo("GEN");
+                nuevo.setDescripcion("General");
+                nuevo.setOrden(0);
+                return resultadoAprendizajeRepository.save(nuevo);
+              });
+    }
+
+    String codigo = "T" + trimestre;
+    return resultadoAprendizajeRepository
+        .findTopByAsignaturaIdAndCodigoIgnoreCaseOrderByIdAsc(asignatura.getId(), codigo)
+        .orElseGet(
+            () -> {
+              ResultadoAprendizaje nuevo = new ResultadoAprendizaje();
+              nuevo.setAsignatura(asignatura);
+              nuevo.setCodigo(codigo);
+              nuevo.setDescripcion("Trimestre " + trimestre);
+              nuevo.setOrden(trimestre);
+              return resultadoAprendizajeRepository.save(nuevo);
+            });
+  }
+
+  private Unidad resolveUnidadPrincipal(ResultadoAprendizaje ra) {
+    if (ra == null || ra.getId() == null) {
+      throw new BadRequestException("Resultado de aprendizaje inválido");
+    }
+
+    return unidadRepository.findByResultadoAprendizajeIdOrderByOrdenAsc(ra.getId()).stream()
+        .filter(u -> u.getTitulo() != null && u.getTitulo().trim().equalsIgnoreCase("Unidad Principal"))
+        .findFirst()
+        .orElseGet(
+            () -> {
+              Unidad unidad = new Unidad();
+              unidad.setResultadoAprendizaje(ra);
+              unidad.setTitulo("Unidad Principal");
+              unidad.setDescripcion(null);
+              unidad.setOrden(1);
+              return unidadRepository.save(unidad);
+            });
   }
 
   private TemaResponseDTO toResponse(Tema tema) {

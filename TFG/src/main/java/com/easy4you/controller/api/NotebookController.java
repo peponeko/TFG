@@ -185,6 +185,7 @@ public class NotebookController {
         asignatura.getNombre(),
         asignatura.getDescripcion(),
         asignatura.getColorHex(),
+        asignatura.getTrimestre(),
         asignatura.getCreatedAt(),
         asignatura.getUpdatedAt());
   }

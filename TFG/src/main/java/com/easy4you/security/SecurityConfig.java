@@ -50,6 +50,7 @@ public class SecurityConfig {
             new AntPathRequestMatcher("/login"),
             new AntPathRequestMatcher("/logout")
         ))
+        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
         .authenticationProvider(authenticationProvider())
         .authorizeHttpRequests(
             auth ->
@@ -88,6 +89,7 @@ public class SecurityConfig {
         .securityMatcher(new AntPathRequestMatcher("/api/**"))
         .csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
+        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authenticationProvider(authenticationProvider())
         .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -102,6 +104,31 @@ public class SecurityConfig {
             .requestMatchers(new AntPathRequestMatcher("/api/usuarios/**")).hasRole("ADMIN")
             .anyRequest().authenticated()
         );
+
+    return http.build();
+  }
+
+  @Bean
+  @Order(3)
+  public SecurityFilterChain appFilterChain(HttpSecurity http) throws Exception {
+    http
+        .securityMatcher(new AntPathRequestMatcher("/app/**"))
+        .csrf(csrf -> csrf.disable())
+        .cors(Customizer.withDefaults())
+        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authenticationProvider(authenticationProvider())
+        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+        .exceptionHandling(ex -> ex
+            .authenticationEntryPoint((request, response, authException) ->
+                response.sendRedirect("/app/login?expired=1"))
+        )
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers(new AntPathRequestMatcher("/app/login"))
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated());
 
     return http.build();
   }
@@ -139,5 +166,18 @@ public class SecurityConfig {
     response.setStatus(status.value());
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     objectMapper.writeValue(response.getOutputStream(), body);
+  }
+
+  private String cspDevPolicy() {
+    return String.join(
+        "; ",
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "img-src 'self' data:",
+        "font-src 'self' https://fonts.gstatic.com data:",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+        "connect-src 'self'");
   }
 }

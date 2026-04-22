@@ -3,6 +3,7 @@ package com.easy4you.controller.api;
 import com.easy4you.dto.documento.DocumentoBusquedaFragmentDTO;
 import com.easy4you.dto.documento.DocumentoBusquedaResultadoDTO;
 import com.easy4you.dto.documento.DocumentoDetalleResponseDTO;
+import com.easy4you.dto.documento.DocumentoEstadoResponseDTO;
 import com.easy4you.dto.documento.DocumentoRequestDTO;
 import com.easy4you.dto.documento.DocumentoChunkResponseDTO;
 import com.easy4you.dto.documento.DocumentoChunksPageResponseDTO;
@@ -35,6 +36,7 @@ import com.easy4you.repository.TemaRepository;
 import com.easy4you.security.AuthenticatedUserService;
 import com.easy4you.service.AsignaturaService;
 import com.easy4you.service.DocumentoIngestionService;
+import com.easy4you.service.DocumentoProcessingService;
 import com.easy4you.service.DocumentoService;
 import com.easy4you.service.DocumentoUploadResult;
 import com.easy4you.service.TemaService;
@@ -82,6 +84,7 @@ public class DocumentoController {
   private final AsignaturaService asignaturaService;
   private final TemaService temaService;
   private final DocumentoIngestionService documentoIngestionService;
+  private final DocumentoProcessingService documentoProcessingService;
   private final DocumentoRepository documentoRepository;
   private final DocumentoChunkRepository documentoChunkRepository;
   private final ResumenRepository resumenRepository;
@@ -121,6 +124,26 @@ public class DocumentoController {
             .findByIdAndUsuarioId(id, usuarioActual.getId())
             .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + id));
     return ResponseEntity.ok(toResponse(documento));
+  }
+
+  @GetMapping("/{id}/estado")
+  public ResponseEntity<DocumentoEstadoResponseDTO> estado(@PathVariable Long id) {
+    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
+
+    Documento documento =
+        documentoRepository
+            .findByIdAndUsuarioId(id, usuarioActual.getId())
+            .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + id));
+
+    long resumenes = resumenRepository.countByDocumentoId(documento.getId());
+    long flashcards = flashcardRepository.countByDocumentoId(documento.getId());
+    long preguntas = preguntaTestRepository.countByDocumentoId(documento.getId());
+
+    DocumentoEstadoResponseDTO response =
+        new DocumentoEstadoResponseDTO(
+            documento.getId(), documento.getEstadoProcesado(), resumenes, flashcards, preguntas);
+
+    return ResponseEntity.ok(response);
   }
 
   @PostMapping("/upload")
@@ -365,6 +388,18 @@ public class DocumentoController {
     }
     documentoService.eliminar(id);
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/{id}/reprocesar")
+  public ResponseEntity<Map<String, String>> reprocesar(@PathVariable Long id) {
+    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
+    Documento documento =
+        documentoRepository
+            .findByIdAndUsuarioId(id, usuarioActual.getId())
+            .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + id));
+
+    documentoProcessingService.procesarAsync(documento.getId());
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("status", "processing"));
   }
 
   private DocumentoResponseDTO toResponse(Documento documento) {

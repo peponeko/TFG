@@ -29,6 +29,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,8 +41,11 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
 
   private static final Logger log = LoggerFactory.getLogger(ResumenGenerationServiceImpl.class);
 
-  private static final int MAX_INPUT_CHARS_DOCUMENTO = 32_000;
-  private static final int MAX_INPUT_CHARS_TEMA = 45_000;
+  private static final String MSG_DOC_NO_PROCESADO =
+      "El documento aún no está procesado. Espera unos segundos y recarga la página.";
+
+  private static final int MAX_INPUT_CHARS_DOCUMENTO = 12_000;
+  private static final int MAX_INPUT_CHARS_TEMA = 18_000;
   private static final int MAX_PUNTOS_CLAVE = 5;
 
   private final ArtefactoGeneradoRepository artefactoGeneradoRepository;
@@ -51,9 +56,78 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
   private final AiService aiService;
   private final AiProperties aiProperties;
   private final ObjectMapper objectMapper;
+  private final TaskExecutor taskExecutor;
 
   @Override
   public Resumen generarResumenDocumento(Long usuarioId, Long documentoId) {
+    return generarResumenDocumentoInternal(usuarioId, documentoId, true);
+  }
+
+  @Override
+  public void solicitarResumenDocumento(Long usuarioId, Long documentoId) {
+    if (usuarioId == null) {
+      throw new BadRequestException("usuarioId es obligatorio");
+    }
+    if (documentoId == null) {
+      throw new BadRequestException("documentoId es obligatorio");
+    }
+
+    Documento documento =
+        documentoRepository
+            .findByIdAndUsuarioId(documentoId, usuarioId)
+            .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
+
+    if (!isDocumentoListo(documento)) {
+      throw new BadRequestException(MSG_DOC_NO_PROCESADO);
+    }
+    if (documento.getTextoExtraido() == null || documento.getTextoExtraido().isBlank()) {
+      throw new BadRequestException("El documento no tiene texto extraído");
+    }
+    if (documento.getTema() == null) {
+      throw new BadRequestException("El documento no tiene tema. Asigna un tema antes de generar resúmenes.");
+    }
+
+    documento.setEstadoProcesado(EstadoProcesadoDocumento.PROCESANDO);
+    documento.setErrorExtraccion(null);
+    documentoRepository.save(documento);
+
+    taskExecutor.execute(() -> generarResumenDocumentoAsync(usuarioId, documentoId));
+  }
+
+  @Async
+  @Override
+  public void generarResumenDocumentoAsync(Long usuarioId, Long documentoId) {
+    try {
+      generarResumenDocumentoInternal(usuarioId, documentoId, false);
+      updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.LISTO, null);
+    } catch (Exception ex) {
+      log.error("Error generando resumen: documentoId={}, usuarioId={}", documentoId, usuarioId, ex);
+      updateDocumentoEstado(
+          usuarioId,
+          documentoId,
+          EstadoProcesadoDocumento.ERROR,
+          ex.getMessage() == null || ex.getMessage().isBlank()
+              ? "No se pudo generar el resumen"
+              : ex.getMessage());
+    }
+  }
+
+  private void updateDocumentoEstado(
+      Long usuarioId, Long documentoId, EstadoProcesadoDocumento estado, String error) {
+    if (usuarioId == null || documentoId == null) {
+      return;
+    }
+    documentoRepository
+        .findByIdAndUsuarioId(documentoId, usuarioId)
+        .ifPresent(
+            doc -> {
+              doc.setEstadoProcesado(estado);
+              doc.setErrorExtraccion(error);
+              documentoRepository.save(doc);
+            });
+  }
+
+  private Resumen generarResumenDocumentoInternal(Long usuarioId, Long documentoId, boolean validarEstado) {
     if (usuarioId == null) {
       throw new BadRequestException("usuarioId es obligatorio");
     }
@@ -71,8 +145,8 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
             .findByIdAndUsuarioId(documentoId, usuarioId)
             .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
 
-    if (!isDocumentoListo(documento)) {
-      throw new BadRequestException("El documento todavía no está procesado");
+    if (validarEstado && !isDocumentoListo(documento)) {
+      throw new BadRequestException(MSG_DOC_NO_PROCESADO);
     }
     if (documento.getTextoExtraido() == null || documento.getTextoExtraido().isBlank()) {
       throw new BadRequestException("El documento no tiene texto extraído");
@@ -84,15 +158,9 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
     String input = truncate(documento.getTextoExtraido(), MAX_INPUT_CHARS_DOCUMENTO);
     String prompt = PromptTemplates.formatResumen(input);
 
-    if (!aiService.isDisponible()) {
-      throw new ServiceUnavailableException(
-          "IA no disponible. Para generar resúmenes instala Ollama y arráncalo en "
-              + aiProperties.getOllama().getBaseUrl());
-    }
-
     String content = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensResumen());
     if (content == null || content.isBlank()) {
-      throw new ServiceUnavailableException("La IA no devolvió contenido para el resumen");
+      throw new ServiceUnavailableException("La IA no devolvió una respuesta válida. Inténtalo de nuevo.");
     }
 
     List<String> puntosClave = extractPuntosClave(content);
@@ -153,15 +221,9 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
     String input = truncate(combined, MAX_INPUT_CHARS_TEMA);
     String prompt = PromptTemplates.formatResumen(input);
 
-    if (!aiService.isDisponible()) {
-      throw new ServiceUnavailableException(
-          "IA no disponible. Para generar resúmenes instala Ollama y arráncalo en "
-              + aiProperties.getOllama().getBaseUrl());
-    }
-
     String content = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensResumen());
     if (content == null || content.isBlank()) {
-      throw new ServiceUnavailableException("La IA no devolvió contenido para el resumen del tema");
+      throw new ServiceUnavailableException("La IA no devolvió una respuesta válida. Inténtalo de nuevo.");
     }
 
     List<String> puntosClave = extractPuntosClave(content);
@@ -321,4 +383,3 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
     }
   }
 }
-

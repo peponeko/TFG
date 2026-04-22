@@ -52,6 +52,9 @@ public class Asignatura extends BaseAuditableEntity {
   @Column(name = "color_hex", length = 7)
   private String colorHex;
 
+  @Column(name = "trimestre")
+  private Integer trimestre;
+
   @OneToMany(mappedBy = "asignatura", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ResultadoAprendizaje> resultadosAprendizaje = new HashSet<>();
 
@@ -61,4 +64,3 @@ public class Asignatura extends BaseAuditableEntity {
   @OneToMany(mappedBy = "asignatura", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<ProgresoAsignatura> progresos = new HashSet<>();
 }
-

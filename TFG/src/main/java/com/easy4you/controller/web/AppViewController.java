@@ -12,7 +12,7 @@ public class AppViewController {
 
   @GetMapping
   public String index() {
-    return "redirect:/app/notebooks";
+    return "redirect:/app/home";
   }
 
   @GetMapping("/login")
@@ -23,6 +23,24 @@ public class AppViewController {
   @GetMapping("/notebooks")
   public String notebooks() {
     return "notebook/index";
+  }
+
+  @GetMapping("/home")
+  public String home() {
+    return "home/index";
+  }
+
+  @GetMapping("/home/{asignaturaId}/trimestres")
+  public String trimestres(@PathVariable Long asignaturaId, Model model) {
+    model.addAttribute("asignaturaId", asignaturaId);
+    return "home/trimestres";
+  }
+
+  @GetMapping("/home/{asignaturaId}/trimestre/{trimestre}/temas")
+  public String temas(@PathVariable Long asignaturaId, @PathVariable Integer trimestre, Model model) {
+    model.addAttribute("asignaturaId", asignaturaId);
+    model.addAttribute("trimestre", trimestre);
+    return "home/temas";
   }
 
   @GetMapping("/notebooks/{id}")

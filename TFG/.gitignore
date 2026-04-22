@@ -2,3 +2,8 @@ target/
 *.class
 uploads/
 *.bat
+.idea/
+*.iml
+.DS_Store
+*.jar
+easy4you-android/

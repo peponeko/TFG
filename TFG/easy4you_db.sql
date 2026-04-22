@@ -63,10 +63,16 @@ CREATE TABLE IF NOT EXISTS asignatura (
     nombre         VARCHAR(120) NOT NULL,
     descripcion    LONGTEXT,
     color_hex      VARCHAR(7),
+    trimestre      TINYINT DEFAULT NULL COMMENT '1=Primer trimestre, 2=Segundo, 3=Tercero, NULL=Sin asignar',
     creado_en      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     actualizado_en DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_asig_usuario FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE CASCADE
 );
+
+-- Migración: añadir trimestre a asignatura (si la BD ya existía)
+ALTER TABLE asignatura
+  ADD COLUMN IF NOT EXISTS trimestre TINYINT DEFAULT NULL
+  COMMENT '1=Primer trimestre, 2=Segundo, 3=Tercero, NULL=Sin asignar';
 
 -- Resultados de Aprendizaje
 CREATE TABLE IF NOT EXISTS resultado_aprendizaje (

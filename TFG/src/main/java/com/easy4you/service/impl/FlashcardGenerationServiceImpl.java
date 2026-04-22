@@ -33,6 +33,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,8 +45,11 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
 
   private static final Logger log = LoggerFactory.getLogger(FlashcardGenerationServiceImpl.class);
 
+  private static final String MSG_DOC_NO_PROCESADO =
+      "El documento aún no está procesado. Espera unos segundos y recarga la página.";
+
   private static final int NUM_FLASHCARDS = 10;
-  private static final int MAX_INPUT_CHARS = 35_000;
+  private static final int MAX_INPUT_CHARS = 12_000;
   private static final int KEYWORD_MAX = 6;
   private static final int CHUNKS_PER_KEYWORD = 20;
 
@@ -122,9 +127,78 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
   private final AiService aiService;
   private final AiProperties aiProperties;
   private final ObjectMapper objectMapper;
+  private final TaskExecutor taskExecutor;
 
   @Override
   public List<Flashcard> generarParaDocumento(Long usuarioId, Long documentoId) {
+    return generarParaDocumentoInternal(usuarioId, documentoId, true);
+  }
+
+  @Override
+  public void solicitarGeneracionParaDocumento(Long usuarioId, Long documentoId) {
+    if (usuarioId == null) {
+      throw new BadRequestException("usuarioId es obligatorio");
+    }
+    if (documentoId == null) {
+      throw new BadRequestException("documentoId es obligatorio");
+    }
+
+    Documento documento =
+        documentoRepository
+            .findByIdAndUsuarioId(documentoId, usuarioId)
+            .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
+
+    if (!isDocumentoListo(documento)) {
+      throw new BadRequestException(MSG_DOC_NO_PROCESADO);
+    }
+    if (documento.getTextoExtraido() == null || documento.getTextoExtraido().isBlank()) {
+      throw new BadRequestException("El documento no tiene texto extraído");
+    }
+    if (documento.getTema() == null) {
+      throw new BadRequestException("El documento no tiene tema. Asigna un tema antes de generar flashcards.");
+    }
+
+    documento.setEstadoProcesado(EstadoProcesadoDocumento.PROCESANDO);
+    documento.setErrorExtraccion(null);
+    documentoRepository.save(documento);
+
+    taskExecutor.execute(() -> generarParaDocumentoAsync(usuarioId, documentoId));
+  }
+
+  @Async
+  @Override
+  public void generarParaDocumentoAsync(Long usuarioId, Long documentoId) {
+    try {
+      generarParaDocumentoInternal(usuarioId, documentoId, false);
+      updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.LISTO, null);
+    } catch (Exception ex) {
+      log.error("Error generando flashcards: documentoId={}, usuarioId={}", documentoId, usuarioId, ex);
+      updateDocumentoEstado(
+          usuarioId,
+          documentoId,
+          EstadoProcesadoDocumento.ERROR,
+          ex.getMessage() == null || ex.getMessage().isBlank()
+              ? "No se pudieron generar flashcards"
+              : ex.getMessage());
+    }
+  }
+
+  private void updateDocumentoEstado(
+      Long usuarioId, Long documentoId, EstadoProcesadoDocumento estado, String error) {
+    if (usuarioId == null || documentoId == null) {
+      return;
+    }
+    documentoRepository
+        .findByIdAndUsuarioId(documentoId, usuarioId)
+        .ifPresent(
+            doc -> {
+              doc.setEstadoProcesado(estado);
+              doc.setErrorExtraccion(error);
+              documentoRepository.save(doc);
+            });
+  }
+
+  private List<Flashcard> generarParaDocumentoInternal(Long usuarioId, Long documentoId, boolean validarEstado) {
     if (usuarioId == null) {
       throw new BadRequestException("usuarioId es obligatorio");
     }
@@ -142,20 +216,15 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
             .findByIdAndUsuarioId(documentoId, usuarioId)
             .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
 
-    if (!isDocumentoListo(documento)) {
-      throw new BadRequestException("El documento todavía no está procesado");
+    if (validarEstado && !isDocumentoListo(documento)) {
+      throw new BadRequestException(MSG_DOC_NO_PROCESADO);
     }
+
     if (documento.getTextoExtraido() == null || documento.getTextoExtraido().isBlank()) {
       throw new BadRequestException("El documento no tiene texto extraído");
     }
     if (documento.getTema() == null) {
       throw new BadRequestException("El documento no tiene tema. Asigna un tema antes de generar flashcards.");
-    }
-
-    if (!aiService.isDisponible()) {
-      throw new ServiceUnavailableException(
-          "IA no disponible. Para generar flashcards instala Ollama y arráncalo en "
-              + aiProperties.getOllama().getBaseUrl());
     }
 
     String input = truncate(documento.getTextoExtraido(), MAX_INPUT_CHARS);
@@ -345,4 +414,3 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
     }
   }
 }
-

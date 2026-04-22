@@ -1,5 +1,12 @@
 (() => {
   const STORAGE_KEY = "easy4you.auth";
+  const TOKEN_COOKIE = "easy4you_token";
+  const NIVEL_ESTUDIO_KEY = "easy4you.nivel_estudio";
+
+  function nivelEstudioKey() {
+    const userId = getAuth()?.userId;
+    return userId ? `${NIVEL_ESTUDIO_KEY}.${userId}` : NIVEL_ESTUDIO_KEY;
+  }
 
   function getAuth() {
     try {
@@ -13,12 +20,23 @@
     }
   }
 
+  function setTokenCookie(token) {
+    if (!token) return;
+    document.cookie = `${TOKEN_COOKIE}=${token}; Path=/; SameSite=Lax`;
+  }
+
+  function clearTokenCookie() {
+    document.cookie = `${TOKEN_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+  }
+
   function setAuth(auth) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
+    if (auth?.token) setTokenCookie(auth.token);
   }
 
   function clearAuth() {
     localStorage.removeItem(STORAGE_KEY);
+    clearTokenCookie();
   }
 
   function getToken() {
@@ -43,9 +61,10 @@
     if (!root) return;
 
     const colors = {
-      info: "border-slate-700 bg-slate-950/70 text-slate-100",
-      success: "border-emerald-900/50 bg-emerald-950/50 text-emerald-100",
-      error: "border-rose-900/50 bg-rose-950/50 text-rose-100",
+      info: "border-[#cfe3ff] bg-[#eef5ff] text-[#1d4e89]",
+      success: "border-[#b9e7cf] bg-[#eafaf1] text-[#0f5132]",
+      warning: "border-[#ffe2a8] bg-[#fff7e8] text-[#8a5a00]",
+      error: "border-[#ffc4cb] bg-[#fff1f3] text-[#8b1e2d]",
     };
 
     const el = document.createElement("div");
@@ -66,14 +85,13 @@
 
     root.classList.remove("hidden");
     root.innerHTML = `
-      <div class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
-      <div class="fixed inset-0 flex items-center justify-center p-6">
-        <div class="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900/60 shadow-2xl">
-          <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-            <h2 class="text-sm font-semibold">${title}</h2>
-            <button id="e4y-modal-close" class="rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-brand-500">Cerrar</button>
+      <div class="apple-modal-overlay">
+        <div class="apple-modal" style="max-width: 520px;">
+          <div class="flex items-center justify-between gap-3" style="border-bottom:1px solid var(--apple-separator); padding-bottom:12px;">
+            <h2 class="text-sm font-semibold" style="color: var(--apple-text);">${title}</h2>
+            <button id="e4y-modal-close" class="apple-btn-secondary" style="padding:8px 10px; font-size:12px;">Cerrar</button>
           </div>
-          <div class="px-5 py-4">${bodyHtml}</div>
+          <div style="padding-top:14px;">${bodyHtml}</div>
         </div>
       </div>
     `;
@@ -85,7 +103,9 @@
 
     const closeBtn = qs("e4y-modal-close");
     if (closeBtn) closeBtn.addEventListener("click", close);
-    root.querySelector(".fixed.inset-0.bg-slate-950\\/60")?.addEventListener("click", close);
+    root.querySelector(".apple-modal-overlay")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) close();
+    });
 
     return close;
   }
@@ -110,7 +130,7 @@
     const res = await fetch(path, init);
     if (res.status === 401) {
       clearAuth();
-      window.location.href = "/app/login";
+      window.location.href = "/app/login?expired=1";
       return null;
     }
 
@@ -128,6 +148,88 @@
 
     return payload;
   }
+
+  let warnedExpiry = false;
+
+  function parseJwtPayload(token) {
+    try {
+      const parts = String(token || "").split(".");
+      if (parts.length < 2) return null;
+      const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = b64 + "===".slice((b64.length + 3) % 4);
+      const json = atob(padded);
+      const payload = JSON.parse(json);
+      return payload && typeof payload === "object" ? payload : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function checkTokenExpiry() {
+    const token = getToken();
+    if (!token) return;
+
+    const payload = parseJwtPayload(token);
+    const exp = payload?.exp;
+    if (!exp || typeof exp !== "number") return;
+
+    const now = Date.now() / 1000;
+    const diff = exp - now;
+    if (diff <= 0) {
+      clearAuth();
+      window.location.href = "/app/login?expired=1";
+      return;
+    }
+
+    if (diff < 300) {
+      if (!warnedExpiry) {
+        warnedExpiry = true;
+        toast("Tu sesión expirará pronto. Guarda tu trabajo.", "warning");
+      }
+    } else {
+      warnedExpiry = false;
+    }
+  }
+
+  function estadoBadgeClass(estado) {
+    const e = (estado || "").toUpperCase();
+    if (e === "PROCESANDO") return "apple-chip apple-badge-processing";
+    if (e === "PROCESADO" || e === "LISTO") return "apple-chip apple-badge-done";
+    if (e === "ERROR") return "apple-chip apple-badge-error";
+    return "apple-chip apple-badge-pending";
+  }
+
+  async function pollDocumentoEstado(documentoId, onDone, onError) {
+    const maxIntentos = 60;
+    let intentos = 0;
+    while (intentos < maxIntentos) {
+      try {
+        const estado = await apiFetch(`/api/documentos/${documentoId}/estado`);
+        const actual = (estado?.estadoProcesado || "").toUpperCase();
+        if (actual === "LISTO" || actual === "PROCESADO") {
+          onDone?.(estado);
+          return;
+        }
+        if (actual === "ERROR") {
+          onError?.(estado?.error || "Error procesando el documento");
+          return;
+        }
+      } catch (err) {
+        onError?.(err.message || "No se pudo consultar el estado del documento");
+        return;
+      }
+      intentos += 1;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    onError?.("La generación está tardando mucho. Comprueba que Ollama está activo.");
+  }
+
+  window.addEventListener("unhandledrejection", (event) => {
+    if (event?.reason?.status === 401) {
+      clearAuth();
+      window.location.href = "/app/login?expired=1";
+    }
+  });
 
   function fmtEstadoDocumento(estado) {
     const e = (estado || "").toUpperCase();
@@ -150,6 +252,63 @@
     return h.startsWith("#") ? h : `#${h}`;
   }
 
+  function getNivelEstudio() {
+    const raw = localStorage.getItem(nivelEstudioKey());
+    return raw ? String(raw).trim().toLowerCase() : null;
+  }
+
+  function isUniversitario() {
+    return getNivelEstudio() === "universitario";
+  }
+
+  function etiquetaPeriodo(num) {
+    if (num === 0) return "General";
+    if (isUniversitario()) return `Cuatrimestre ${num}`;
+    if (num === 1) return "Primer trimestre";
+    if (num === 2) return "Segundo trimestre";
+    if (num === 3) return "Tercer trimestre";
+    return "General";
+  }
+
+  function parsePeriodoDesdeEtiqueta(texto) {
+    const t = String(texto || "").trim().toLowerCase();
+    if (!t) return 0;
+    if (t.includes("1")) return 1;
+    if (t.includes("2")) return 2;
+    if (t.includes("3")) return 3;
+    return 0;
+  }
+
+  async function ensureNivelEstudioSeleccionado() {
+    const existente = getNivelEstudio();
+    if (existente) return existente;
+
+    return await new Promise((resolve) => {
+      const close = openModal(
+        "Antes de empezar",
+        `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <p style="margin:0; color: var(--apple-text-secondary);">¿Cuál es tu nivel educativo?</p>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="universitario">Estudiante universitario</button>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="ciclo-superior">Ciclo superior</button>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="ciclo-medio">Ciclo medio</button>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="eso-bachillerato">ESO o Bachillerato</button>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="primaria">Primaria</button>
+          <button class="apple-btn-secondary nivel-opt" data-nivel="no-estudiante">No estudiante</button>
+        </div>
+      `
+      );
+      Array.from(document.querySelectorAll(".nivel-opt")).forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const nivel = btn.dataset.nivel;
+          localStorage.setItem(nivelEstudioKey(), nivel);
+          close();
+          resolve(nivel);
+        });
+      });
+    });
+  }
+
   function setupLogout() {
     const btn = qs("logout-btn");
     if (!btn) return;
@@ -162,7 +321,7 @@
   async function initLogin() {
     const token = getToken();
     if (token) {
-      window.location.href = "/app/notebooks";
+      window.location.href = "/app/home";
       return;
     }
 
@@ -180,7 +339,7 @@
           const res = await apiFetch("/api/auth/login", { method: "POST", body: { email, password } });
           setAuth({ token: res.token, type: res.type, userId: res.userId, email: res.email, roles: res.roles });
           toast("Login correcto", "success");
-          window.location.href = "/app/notebooks";
+          window.location.href = "/app/home";
         } catch (err) {
           toast(err.message || "No se pudo iniciar sesión", "error");
         }
@@ -197,13 +356,12 @@
         if (!nombre || !apellidos || !email || !password) return;
 
         try {
-          const res = await apiFetch("/api/auth/register", {
+          await apiFetch("/api/auth/register", {
             method: "POST",
             body: { nombre, apellidos, email, password },
           });
-          setAuth({ token: res.token, type: res.type, userId: res.userId, email: res.email, roles: res.roles });
-          toast("Cuenta creada", "success");
-          window.location.href = "/app/notebooks";
+          registerForm.reset();
+          toast("Cuenta creada con éxito. Inicia sesión para continuar.", "success");
         } catch (err) {
           toast(err.message || "No se pudo registrar", "error");
         }
@@ -236,8 +394,9 @@
           notebooks.forEach((nb) => {
             const a = document.createElement("a");
             a.href = `/app/notebooks/${nb.id}`;
-            a.className =
-              "group rounded-2xl border border-slate-800 bg-slate-900/30 p-5 hover:border-brand-500 hover:bg-slate-900/40";
+            a.className = "apple-card";
+            a.style.padding = "18px";
+            a.style.border = "1px solid var(--apple-separator)";
 
             const badge = document.createElement("div");
             const color = normalizeHex(nb.colorHex) || "#6D4CFF";
@@ -249,11 +408,13 @@
             title.textContent = nb.nombre || `Notebook ${nb.id}`;
 
             const desc = document.createElement("p");
-            desc.className = "mt-1 text-sm text-slate-400";
+            desc.className = "mt-1 text-sm";
+            desc.style.color = "var(--apple-text-secondary)";
             desc.textContent = truncate(nb.descripcion || "Sin descripción", 120);
 
             const meta = document.createElement("p");
-            meta.className = "mt-4 text-xs text-slate-500";
+            meta.className = "mt-4 text-xs";
+            meta.style.color = "var(--apple-text-secondary)";
             meta.textContent = "Abrir notebook →";
 
             a.appendChild(badge);
@@ -276,18 +437,22 @@
 
         shared.forEach((s) => {
           const card = document.createElement("div");
-          card.className = "rounded-2xl border border-slate-800 bg-slate-900/20 p-4";
+          card.className = "apple-card";
+          card.style.padding = "14px";
+          card.style.border = "1px solid var(--apple-separator)";
 
           const title = document.createElement("p");
           title.className = "text-sm font-semibold";
           title.textContent = `Notebook #${s.asignaturaId}`;
 
           const meta = document.createElement("p");
-          meta.className = "mt-1 text-xs text-slate-500";
+          meta.className = "mt-1 text-xs";
+          meta.style.color = "var(--apple-text-secondary)";
           meta.textContent = `Rol: ${s.rol || "VIEWER"} · Propietario: ${s.propietarioId}`;
 
           const hint = document.createElement("p");
-          hint.className = "mt-3 text-xs text-slate-400";
+          hint.className = "mt-3 text-xs";
+          hint.style.color = "var(--apple-text-secondary)";
           hint.textContent = "Vista completa de notebooks compartidos: pendiente de UX/permiso.";
 
           card.appendChild(title);
@@ -426,7 +591,8 @@
 
       if (!docs.length) {
         const p = document.createElement("p");
-        p.className = "text-sm text-slate-500";
+        p.className = "text-sm";
+        p.style.color = "var(--apple-text-secondary)";
         p.textContent = "No hay documentos.";
         sourcesList.appendChild(p);
         return;
@@ -435,8 +601,9 @@
       docs.forEach((d) => {
         const estado = fmtEstadoDocumento(d.estadoProcesado);
         const btn = document.createElement("button");
-        btn.className =
-          "w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-left hover:border-brand-500";
+        btn.className = "w-full rounded-xl px-3 py-2 text-left";
+        btn.style.border = "1px solid var(--apple-separator)";
+        btn.style.background = "#ffffff";
         btn.addEventListener("click", () => {
           currentDocId = d.id;
           loadDocumentoDetalle(d.id);
@@ -448,10 +615,12 @@
 
         const left = document.createElement("div");
         const name = document.createElement("p");
-        name.className = "text-sm font-semibold text-slate-100";
+        name.className = "text-sm font-semibold";
+        name.style.color = "var(--apple-text)";
         name.textContent = truncate(d.nombreOriginal || `Documento ${d.id}`, 52);
         const meta = document.createElement("p");
-        meta.className = "mt-0.5 text-xs text-slate-500";
+        meta.className = "mt-0.5 text-xs";
+        meta.style.color = "var(--apple-text-secondary)";
         meta.textContent = d.temaId ? `Tema #${d.temaId}` : "Sin tema";
         left.appendChild(name);
         left.appendChild(meta);
@@ -546,8 +715,11 @@
 
       const bubble = document.createElement("div");
       bubble.className = isUser
-        ? "max-w-[85%] rounded-2xl bg-brand-600/20 px-4 py-3 text-sm text-slate-100"
-        : "max-w-[85%] rounded-2xl border border-slate-800 bg-slate-950/20 px-4 py-3 text-sm text-slate-100";
+        ? "max-w-[85%] rounded-2xl px-4 py-3 text-sm"
+        : "max-w-[85%] rounded-2xl px-4 py-3 text-sm";
+      bubble.style.color = "var(--apple-text)";
+      bubble.style.background = isUser ? "#eaf3ff" : "#ffffff";
+      bubble.style.border = "1px solid var(--apple-separator)";
 
       const content = document.createElement("div");
       content.className = "whitespace-pre-wrap";
@@ -557,9 +729,12 @@
       const fuentes = sources || msg.fuentes;
       if (!isUser && Array.isArray(fuentes) && fuentes.length) {
         const srcBox = document.createElement("div");
-        srcBox.className = "mt-3 border-t border-slate-800 pt-2 text-xs text-slate-300";
+        srcBox.className = "mt-3 pt-2 text-xs";
+        srcBox.style.borderTop = "1px solid var(--apple-separator)";
+        srcBox.style.color = "var(--apple-text-secondary)";
         const title = document.createElement("p");
-        title.className = "font-semibold text-slate-400";
+        title.className = "font-semibold";
+        title.style.color = "var(--apple-text-secondary)";
         title.textContent = "Fuentes";
         srcBox.appendChild(title);
 
@@ -574,6 +749,34 @@
       }
 
       wrap.appendChild(bubble);
+      chatMessages.appendChild(wrap);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function renderTypingIndicator() {
+      if (!chatMessages) return null;
+      const wrap = document.createElement("div");
+      wrap.className = "flex justify-start";
+      wrap.id = "chat-typing-indicator";
+      wrap.innerHTML = `
+        <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm" style="border:1px solid var(--apple-separator); background:#ffffff; color:var(--apple-text-secondary);">
+          IA escribiendo<span class="typing-dots">...</span>
+        </div>
+      `;
+      chatMessages.appendChild(wrap);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return wrap;
+    }
+
+    function renderInlineChatError(message) {
+      if (!chatMessages) return;
+      const wrap = document.createElement("div");
+      wrap.className = "flex justify-start";
+      wrap.innerHTML = `
+        <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm" style="border:1px solid #ffc4cb; background:#fff1f3; color:#8b1e2d;">
+          ${message || "No se pudo obtener respuesta de la IA"}
+        </div>
+      `;
       chatMessages.appendChild(wrap);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -675,12 +878,18 @@
         chatInput.value = "";
         renderChatMessage({ rol: "USER", contenido: content });
 
-        const res = await apiFetch(`/api/chat/conversaciones/${currentConversationId}/mensajes`, {
-          method: "POST",
-          body: { contenido: content },
-        });
-
-        if (res?.assistantMessage) renderChatMessage(res.assistantMessage, res.assistantMessage.fuentes);
+        const typing = renderTypingIndicator();
+        try {
+          const res = await apiFetch(`/api/chat/conversaciones/${currentConversationId}/mensajes`, {
+            method: "POST",
+            body: { contenido: content },
+          });
+          typing?.remove();
+          if (res?.assistantMessage) renderChatMessage(res.assistantMessage, res.assistantMessage.fuentes);
+        } catch (err) {
+          typing?.remove();
+          renderInlineChatError(err.message || "La IA no está disponible en este momento.");
+        }
       } catch (err) {
         toast(err.message || "Error enviando mensaje", "error");
       }
@@ -693,11 +902,20 @@
         const doc = detail.documento;
 
         if (docTitle) docTitle.textContent = doc.nombreOriginal || `Documento ${doc.id}`;
-        if (docStatus) docStatus.textContent = `Estado: ${doc.estadoProcesado} · Tema: ${doc.temaId ?? "—"}`;
+        if (docStatus) {
+          docStatus.innerHTML = "";
+          const estadoEl = document.createElement("span");
+          estadoEl.className = estadoBadgeClass(doc.estadoProcesado);
+          estadoEl.textContent = (doc.estadoProcesado || "PENDIENTE").toUpperCase();
+          const txt = document.createElement("span");
+          txt.className = "ml-2 text-xs text-slate-300";
+          txt.textContent = `Tema: ${doc.temaId ?? "—"}`;
+          docStatus.appendChild(estadoEl);
+          docStatus.appendChild(txt);
+        }
 
         const estado = fmtEstadoDocumento(doc.estadoProcesado);
-        docStatus?.classList.remove("text-slate-400", "text-rose-200", "text-emerald-200", "text-amber-200");
-        docStatus?.classList.add("text-slate-300");
+        docStatus?.classList.remove("text-slate-400", "text-rose-200", "text-emerald-200", "text-amber-200", "text-slate-300");
 
         if (docError) {
           if (doc.errorExtraccion) {
@@ -714,18 +932,23 @@
           const items = detail.chunks?.items || [];
           if (!items.length) {
             const p = document.createElement("p");
-            p.className = "text-xs text-slate-500";
+            p.className = "text-xs";
+            p.style.color = "var(--apple-text-secondary)";
             p.textContent = "Sin chunks todavía.";
             docChunks.appendChild(p);
           } else {
             items.slice(0, 6).forEach((c) => {
               const div = document.createElement("div");
-              div.className = "rounded-xl border border-slate-800 bg-slate-950/20 p-3";
+              div.className = "rounded-xl p-3";
+              div.style.border = "1px solid var(--apple-separator)";
+              div.style.background = "#ffffff";
               const meta = document.createElement("p");
-              meta.className = "text-[11px] font-semibold text-slate-400";
+              meta.className = "text-[11px] font-semibold";
+              meta.style.color = "var(--apple-text-secondary)";
               meta.textContent = `Fragmento ${c.indiceChunk}` + (c.paginaOrigen != null ? ` · Página ${c.paginaOrigen}` : "");
               const text = document.createElement("p");
-              text.className = "mt-1 text-xs text-slate-200 whitespace-pre-wrap";
+              text.className = "mt-1 text-xs whitespace-pre-wrap";
+              text.style.color = "var(--apple-text)";
               text.textContent = truncate(c.texto, 260);
               div.appendChild(meta);
               div.appendChild(text);
@@ -741,19 +964,23 @@
           const pq = Array.isArray(detail.preguntas) ? detail.preguntas : [];
 
           const line1 = document.createElement("p");
-          line1.className = "text-sm text-slate-200";
+          line1.className = "text-sm";
+          line1.style.color = "var(--apple-text)";
           line1.textContent = `${res.length} resúmenes · ${fc.length} flashcards · ${pq.length} preguntas`;
           docArtefacts.appendChild(line1);
 
           if (res.length) {
             const last = res[0];
             const box = document.createElement("div");
-            box.className = "mt-3 rounded-xl border border-slate-800 bg-slate-950/20 p-3";
+            box.className = "mt-3 rounded-xl p-3";
+            box.style.border = "1px solid var(--apple-separator)";
+            box.style.background = "#ffffff";
             const t = document.createElement("p");
             t.className = "text-sm font-semibold";
             t.textContent = truncate(last.titulo || "Resumen", 90);
             const c = document.createElement("p");
-            c.className = "mt-1 text-xs text-slate-400";
+            c.className = "mt-1 text-xs";
+            c.style.color = "var(--apple-text-secondary)";
             c.textContent = truncate(last.contenido || "", 150);
             box.appendChild(t);
             box.appendChild(c);
@@ -764,31 +991,54 @@
         if (startFlashcards) startFlashcards.href = `/app/estudio/flashcards?documentoId=${documentoId}`;
         if (startTest) startTest.href = `/app/estudio/test?documentoId=${documentoId}`;
 
-        genResumenBtn?.addEventListener("click", () => generateArtefact("resumen", documentoId));
-        genFlashcardsBtn?.addEventListener("click", () => generateArtefact("flashcards", documentoId));
-        genTestBtn?.addEventListener("click", () => generateArtefact("test", documentoId));
+        if (genResumenBtn) genResumenBtn.onclick = () => generateArtefact("resumen", documentoId, genResumenBtn);
+        if (genFlashcardsBtn) genFlashcardsBtn.onclick = () => generateArtefact("flashcards", documentoId, genFlashcardsBtn);
+        if (genTestBtn) genTestBtn.onclick = () => generateArtefact("test", documentoId, genTestBtn);
       } catch (err) {
         toast(err.message || "No se pudo cargar el documento", "error");
       }
     }
 
-    async function generateArtefact(type, documentoId) {
+    function setGeneratingState(btn, loading) {
+      if (!btn) return;
+      if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent || "";
+      btn.disabled = !!loading;
+      if (loading) {
+        btn.innerHTML = `<span class="inline-flex items-center gap-2"><svg class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"></circle><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" stroke-width="3"></path></svg>Generando con IA...</span>`;
+      } else {
+        btn.textContent = btn.dataset.originalText;
+      }
+    }
+
+    async function generateArtefact(type, documentoId, button) {
       if (!documentoId) return;
+      setGeneratingState(button, true);
       try {
         if (type === "resumen") {
           await apiFetch(`/api/resumen/generar/documento/${documentoId}`, { method: "POST" });
-          toast("Resumen generado", "success");
         } else if (type === "flashcards") {
           await apiFetch(`/api/flashcards/generar/${documentoId}`, { method: "POST" });
-          toast("Flashcards generadas", "success");
         } else if (type === "test") {
           await apiFetch(`/api/preguntas/generar/${documentoId}`, { method: "POST" });
-          toast("Test generado", "success");
         }
-
-        await loadDocumentoDetalle(documentoId);
-        await refreshOverview();
+        await pollDocumentoEstado(
+          documentoId,
+          async () => {
+            const etiqueta =
+              type === "resumen" ? "Resumen generado" : type === "flashcards" ? "Flashcards generadas" : "Test generado";
+            toast(`✓ ${etiqueta}`, "success");
+            await loadDocumentoDetalle(documentoId);
+            await refreshOverview();
+            setGeneratingState(button, false);
+          },
+          async (msg) => {
+            toast(msg || "Error generando con IA", "error");
+            await loadDocumentoDetalle(documentoId);
+            setGeneratingState(button, false);
+          }
+        );
       } catch (err) {
+        setGeneratingState(button, false);
         toast(err.message || "No se pudo generar", "error");
       }
     }
@@ -1539,13 +1789,449 @@
     await refresh();
   }
 
+  async function initHomePage() {
+    requireAuth();
+    setupLogout();
+    await ensureNivelEstudioSeleccionado();
+
+    const grid = qs("asignaturas-grid");
+    const showMoreWrap = qs("show-more-wrap");
+    const showMoreBtn = qs("show-more-btn");
+    let asignaturas = [];
+    let pagina = 0;
+
+    function renderGrid() {
+      if (!grid) return;
+      grid.innerHTML = "";
+      const inicio = pagina * 10;
+      const fin = inicio + 10;
+      const visibles = asignaturas.slice(inicio, fin);
+
+      visibles.forEach((a) => {
+        const card = document.createElement("button");
+        card.className = "asignatura-tile";
+        card.style.borderTop = `4px solid ${normalizeHex(a.colorHex) || "#0071e3"}`;
+        card.innerHTML = `
+          ${a.trimestre ? `<span class="asignatura-chip">T${a.trimestre}</span>` : ""}
+          <span class="asignatura-delete" title="Eliminar asignatura">×</span>
+          <span class="asignatura-name">${truncate(a.nombre || "Asignatura", 60)}</span>
+        `;
+        card.querySelector(".asignatura-delete")?.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!confirm(`¿Eliminar la asignatura "${a.nombre || "sin nombre"}"?`)) return;
+          try {
+            await apiFetch(`/api/asignaturas/${a.id}`, { method: "DELETE" });
+            toast("Asignatura eliminada", "success");
+            asignaturas = asignaturas.filter((x) => x.id !== a.id);
+            if (pagina > 0 && pagina * 10 >= asignaturas.length) pagina -= 1;
+            renderGrid();
+          } catch (err) {
+            toast(err.message || "No se pudo eliminar la asignatura", "error");
+          }
+        });
+        card.addEventListener("click", () => {
+          window.location.href = `/app/home/${a.id}/trimestres`;
+        });
+        grid.appendChild(card);
+      });
+
+      const slotsVacios = Math.max(0, 10 - visibles.length);
+      for (let i = 0; i < slotsVacios; i += 1) {
+        const empty = document.createElement("button");
+        empty.className = "asignatura-empty";
+        empty.innerHTML = '<span class="plus">+</span>';
+        empty.addEventListener("click", openCrearAsignaturaModal);
+        grid.appendChild(empty);
+      }
+
+      const hayMas = fin < asignaturas.length;
+      if (showMoreWrap) showMoreWrap.style.display = hayMas ? "flex" : "none";
+    }
+
+    function openCrearAsignaturaModal() {
+      const close = openModal(
+        "Crear asignatura",
+        `
+        <form id="form-crear-asignatura" class="space-y-3">
+          <input id="asig-nombre" class="apple-input" placeholder="Ej: Matemáticas" required />
+          <textarea id="asig-descripcion" class="apple-input" rows="3" placeholder="Descripción (opcional)"></textarea>
+          <label class="block text-sm text-slate-600">Color identificativo</label>
+          <input id="asig-color" type="color" value="#0071e3" class="h-10 w-full" />
+          <select id="asig-trimestre" class="apple-input">
+            <option value="">Sin asignar</option>
+            <option value="1">${isUniversitario() ? "1er Cuatrimestre" : "1er Trimestre"}</option>
+            <option value="2">${isUniversitario() ? "2º Cuatrimestre" : "2º Trimestre"}</option>
+            ${isUniversitario() ? "" : '<option value="3">3er Trimestre</option>'}
+          </select>
+          <button class="apple-btn-primary w-full" type="submit">Crear asignatura</button>
+        </form>
+      `
+      );
+
+      qs("form-crear-asignatura")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nombre = qs("asig-nombre")?.value?.trim();
+        if (!nombre) return;
+        const trimestreRaw = qs("asig-trimestre")?.value;
+        try {
+          await apiFetch("/api/asignaturas", {
+            method: "POST",
+            body: {
+              nombre,
+              descripcion: qs("asig-descripcion")?.value?.trim() || null,
+              colorHex: qs("asig-color")?.value || "#0071e3",
+              trimestre: trimestreRaw ? Number(trimestreRaw) : null,
+            },
+          });
+          close();
+          toast("Asignatura creada", "success");
+          asignaturas = await apiFetch("/api/asignaturas");
+          pagina = 0;
+          renderGrid();
+        } catch (err) {
+          toast(err.message || "No se pudo crear la asignatura", "error");
+        }
+      });
+    }
+
+    showMoreBtn?.addEventListener("click", () => {
+      pagina += 1;
+      renderGrid();
+    });
+
+    try {
+      asignaturas = await apiFetch("/api/asignaturas");
+      asignaturas = Array.isArray(asignaturas) ? asignaturas : [];
+      renderGrid();
+    } catch (err) {
+      toast(err.message || "No se pudieron cargar asignaturas", "error");
+    }
+  }
+
+  async function initTrimestresPage() {
+    requireAuth();
+    setupLogout();
+    const asignaturaId = Number(document.body.dataset.asignaturaId);
+    if (!asignaturaId) return;
+
+    const title = qs("asignatura-title");
+    const crumb = qs("breadcrumb-asignatura");
+    const dot = qs("asignatura-dot");
+    const grid = qs("trimestres-grid");
+    const fab = qs("fab-add");
+    let asignatura = null;
+
+    function colorToRgba(hex, alpha) {
+      const h = (normalizeHex(hex) || "#0071e3").replace("#", "");
+      const full = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
+      const n = Number.parseInt(full, 16);
+      const r = (n >> 16) & 255;
+      const g = (n >> 8) & 255;
+      const b = n & 255;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function openCrearTemaModal() {
+      const close = openModal(
+        "Nuevo tema",
+        `
+        <form id="form-crear-tema-trimestres" class="space-y-3">
+          <input id="tema-titulo" class="apple-input" placeholder="Título" required />
+          <textarea id="tema-desc" class="apple-input" rows="3" placeholder="Descripción (opcional)"></textarea>
+          <input id="tema-palabras" class="apple-input" placeholder="Palabras clave (coma separadas)" />
+          <select id="tema-trimestre" class="apple-input">
+            <option value="1">${isUniversitario() ? "1er Cuatrimestre" : "1er Trimestre"}</option>
+            <option value="2">${isUniversitario() ? "2º Cuatrimestre" : "2º Trimestre"}</option>
+            ${isUniversitario() ? "" : '<option value="3">3er Trimestre</option>'}
+            <option value="0">General</option>
+          </select>
+          <button class="apple-btn-primary w-full" type="submit">Crear tema</button>
+        </form>
+      `
+      );
+
+      qs("form-crear-tema-trimestres")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await apiFetch("/api/temas/rapido", {
+            method: "POST",
+            body: {
+              asignaturaId,
+              trimestre: Number(qs("tema-trimestre")?.value || "0"),
+              titulo: qs("tema-titulo")?.value?.trim(),
+              descripcion: qs("tema-desc")?.value?.trim() || null,
+              palabrasClave: qs("tema-palabras")?.value?.trim() || null,
+            },
+          });
+          close();
+          toast("Tema creado", "success");
+        } catch (err) {
+          toast(err.message || "No se pudo crear el tema", "error");
+        }
+      });
+    }
+
+    try {
+      const [asig, resumen] = await Promise.all([
+        apiFetch(`/api/asignaturas/${asignaturaId}`),
+        apiFetch(`/api/asignaturas/${asignaturaId}/resumen-trimestres`),
+      ]);
+      asignatura = asig;
+      const color = normalizeHex(asig.colorHex) || "#0071e3";
+      if (title) title.textContent = asig.nombre || "Asignatura";
+      if (crumb) crumb.textContent = asig.nombre || "Asignatura";
+      if (dot) dot.style.background = color;
+
+      const cards = isUniversitario()
+        ? [
+            { t: 1, code: "C1", nombre: "Primer cuatrimestre", count: resumen?.trimestre1 || 0 },
+            { t: 2, code: "C2", nombre: "Segundo cuatrimestre", count: resumen?.trimestre2 || 0 },
+            { t: 0, code: "·", nombre: "General", count: resumen?.sinAsignar || 0 },
+          ]
+        : [
+            { t: 1, code: "T1", nombre: "Primer trimestre", count: resumen?.trimestre1 || 0 },
+            { t: 2, code: "T2", nombre: "Segundo trimestre", count: resumen?.trimestre2 || 0 },
+            { t: 3, code: "T3", nombre: "Tercer trimestre", count: resumen?.trimestre3 || 0 },
+            { t: 0, code: "·", nombre: "General", count: resumen?.sinAsignar || 0 },
+          ];
+      grid.innerHTML = "";
+      cards.forEach((c) => {
+        const card = document.createElement("button");
+        card.className = "trimestre-card";
+        card.style.background = `linear-gradient(180deg, ${colorToRgba(color, 0.08)}, #ffffff)`;
+        card.style.borderColor = colorToRgba(color, 0.2);
+        card.innerHTML = `
+          <p class="trimestre-num" style="color:${colorToRgba(color, 0.5)};">${c.code}</p>
+          <p class="trimestre-name">${c.nombre}</p>
+          <p class="trimestre-count">${c.count} temas</p>
+        `;
+        card.addEventListener("click", () => {
+          window.location.href = `/app/home/${asignaturaId}/trimestre/${c.t}/temas`;
+        });
+        grid.appendChild(card);
+      });
+    } catch (err) {
+      toast(err.message || "No se pudieron cargar trimestres", "error");
+    }
+
+    fab?.addEventListener("click", openCrearTemaModal);
+  }
+
+  async function initTemasPage() {
+    requireAuth();
+    setupLogout();
+    const asignaturaId = Number(document.body.dataset.asignaturaId);
+    const trimestre = Number(document.body.dataset.trimestre);
+    if (!asignaturaId && asignaturaId !== 0) return;
+
+    const list = qs("temas-list");
+    const empty = qs("temas-empty");
+    const search = qs("temas-search");
+    const title = qs("page-title");
+    const breadcrumbAsig = qs("breadcrumb-asignatura");
+    const breadcrumbTrim = qs("breadcrumb-trimestre");
+    const fabMenu = qs("fab-menu");
+    const fabMain = qs("fab-main");
+    const fabNewTema = qs("fab-new-tema");
+    const fabUploadDoc = qs("fab-upload-doc");
+    const fabNewUnidad = qs("fab-new-unidad");
+    const btnAddFirstTema = qs("btn-add-first-tema");
+    let temas = [];
+    let temasFiltrados = [];
+
+    function nombreTrimestre(t) {
+      return etiquetaPeriodo(t);
+    }
+
+    function renderTemas() {
+      if (!list) return;
+      list.innerHTML = "";
+      if (!temasFiltrados.length) {
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+      temasFiltrados.forEach((t) => {
+        const row = document.createElement("div");
+        row.className = "tema-row";
+        row.innerHTML = `
+          <div>
+            <p class="tema-title">${truncate(t.titulo || "Tema", 120)}</p>
+            ${t.descripcion ? `<p class="tema-desc">${truncate(t.descripcion, 160)}</p>` : ""}
+          </div>
+          <div class="tema-chips">
+            <span class="apple-chip">📄 ${t.documentosCount || 0}</span>
+            <span class="apple-chip">🃏 ${t.flashcardsCount || 0}</span>
+            <span class="apple-chip">✅ ${t.preguntasCount || 0}</span>
+            <button class="tema-delete-chip" title="Eliminar tema">Eliminar</button>
+          </div>
+        `;
+        row.querySelector(".tema-delete-chip")?.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!confirm(`¿Eliminar el tema "${t.titulo || "sin nombre"}"?`)) return;
+          try {
+            await apiFetch(`/api/temas/${t.id}`, { method: "DELETE" });
+            toast("Tema eliminado", "success");
+            temas = temas.filter((x) => x.id !== t.id);
+            filtrar(search?.value || "");
+          } catch (err) {
+            toast(err.message || "No se pudo eliminar el tema", "error");
+          }
+        });
+        row.addEventListener("click", () => {
+          window.location.href = `/app/notebooks/${asignaturaId}?temaId=${t.id}`;
+        });
+        list.appendChild(row);
+      });
+    }
+
+    function filtrar(query = "") {
+      const q = query.trim().toLowerCase();
+      temasFiltrados = temas.filter((t) => {
+        const triTema = t.trimestre == null ? 0 : Number(t.trimestre);
+        if (triTema !== trimestre) {
+          return false;
+        }
+        if (!q) return true;
+        return (
+          (t.titulo || "").toLowerCase().includes(q) ||
+          (t.descripcion || "").toLowerCase().includes(q) ||
+          (t.palabrasClave || "").toLowerCase().includes(q)
+        );
+      });
+      renderTemas();
+    }
+
+    function toggleFabMenu(force = null) {
+      if (!fabMenu) return;
+      const open = force == null ? fabMenu.dataset.open !== "true" : !!force;
+      fabMenu.dataset.open = open ? "true" : "false";
+    }
+
+    function openCrearTemaModal() {
+      toggleFabMenu(false);
+      const close = openModal(
+        "Nuevo tema",
+        `
+        <form id="form-crear-tema" class="space-y-3">
+          <input id="nt-titulo" class="apple-input" placeholder="Título" required />
+          <textarea id="nt-desc" class="apple-input" rows="3" placeholder="Descripción (opcional)"></textarea>
+          <input id="nt-tags" class="apple-input" placeholder="Palabras clave separadas por coma" />
+          <button class="apple-btn-primary w-full" type="submit">Guardar tema</button>
+        </form>
+      `
+      );
+      qs("form-crear-tema")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const nuevo = await apiFetch("/api/temas/rapido", {
+            method: "POST",
+            body: {
+              asignaturaId,
+              trimestre,
+              titulo: qs("nt-titulo")?.value?.trim(),
+              descripcion: qs("nt-desc")?.value?.trim() || null,
+              palabrasClave: qs("nt-tags")?.value?.trim() || null,
+            },
+          });
+          close();
+          toast("Tema creado", "success");
+          temas.unshift({
+            ...nuevo,
+            trimestre: trimestre === 0 ? null : trimestre,
+            documentosCount: 0,
+            flashcardsCount: 0,
+            preguntasCount: 0,
+          });
+          filtrar(search?.value || "");
+        } catch (err) {
+          toast(err.message || "No se pudo crear el tema", "error");
+        }
+      });
+    }
+
+    function openSubirDocumentoModal() {
+      toggleFabMenu(false);
+      const opciones = temasFiltrados
+        .map((t) => `<option value="${t.id}">${truncate(t.titulo || `Tema ${t.id}`, 80)}</option>`)
+        .join("");
+      const close = openModal(
+        "Subir documento",
+        `
+        <form id="form-subir-documento" class="space-y-3">
+          <select id="doc-tema" class="apple-input" required>
+            <option value="">Selecciona tema</option>
+            ${opciones}
+          </select>
+          <input id="doc-file" type="file" class="apple-input" required />
+          <button class="apple-btn-primary w-full" type="submit">Subir documento</button>
+        </form>
+      `
+      );
+      qs("form-subir-documento")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const file = qs("doc-file")?.files?.[0];
+        const temaId = qs("doc-tema")?.value;
+        if (!file || !temaId) return;
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("asignaturaId", String(asignaturaId));
+        fd.append("temaId", String(temaId));
+        try {
+          await apiFetch("/api/documentos/upload", { method: "POST", body: fd });
+          close();
+          toast("Documento subido", "success");
+        } catch (err) {
+          toast(err.message || "No se pudo subir el documento", "error");
+        }
+      });
+    }
+
+    try {
+      const asig = await apiFetch(`/api/asignaturas/${asignaturaId}`);
+      breadcrumbAsig.textContent = asig.nombre || "Asignatura";
+      breadcrumbAsig.href = `/app/home/${asignaturaId}/trimestres`;
+      breadcrumbTrim.textContent = nombreTrimestre(trimestre);
+      title.textContent = `${asig.nombre || "Asignatura"} · ${nombreTrimestre(trimestre)}`;
+
+      const temasPlanos = await apiFetch(`/api/asignaturas/${asignaturaId}/temas-planos`);
+      temas = Array.isArray(temasPlanos) ? temasPlanos : [];
+      filtrar("");
+    } catch (err) {
+      toast(err.message || "No se pudieron cargar temas", "error");
+    }
+
+    search?.addEventListener("input", () => filtrar(search.value || ""));
+    fabMain?.addEventListener("click", () => toggleFabMenu());
+    fabNewTema?.addEventListener("click", openCrearTemaModal);
+    btnAddFirstTema?.addEventListener("click", openCrearTemaModal);
+    fabUploadDoc?.addEventListener("click", openSubirDocumentoModal);
+    fabNewUnidad?.addEventListener("click", () => {
+      toggleFabMenu(false);
+      toast("La creación de unidades se añadirá en una siguiente iteración.", "info");
+    });
+    document.addEventListener("click", (e) => {
+      if (!fabMenu) return;
+      if (!fabMenu.contains(e.target) && fabMenu.dataset.open === "true") {
+        toggleFabMenu(false);
+      }
+    });
+  }
+
   async function init() {
     const page = document.body.dataset.page;
     if (!page) return;
 
     if (page !== "login") requireAuth();
+    checkTokenExpiry();
+    setInterval(checkTokenExpiry, 60_000);
 
     if (page === "login") return initLogin();
+    if (page === "home-index") return initHomePage();
+    if (page === "home-trimestres") return initTrimestresPage();
+    if (page === "home-temas") return initTemasPage();
     if (page === "notebook-index") return initNotebookIndex();
     if (page === "notebook-detail") return initNotebookDetail();
     if (page === "notebook-sources") return initNotebookSources();
@@ -1557,4 +2243,3 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
-

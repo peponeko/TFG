@@ -14,6 +14,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,10 +37,10 @@ public class ResumenController {
   private final ObjectMapper objectMapper;
 
   @PostMapping("/generar/documento/{id}")
-  public ResponseEntity<ResumenResponseDTO> generarDocumento(@PathVariable Long id) {
+  public ResponseEntity<Map<String, String>> generarDocumento(@PathVariable Long id) {
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-    Resumen resumen = resumenGenerationService.generarResumenDocumento(usuarioActual.getId(), id);
-    return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(resumen));
+    resumenGenerationService.solicitarResumenDocumento(usuarioActual.getId(), id);
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("status", "processing"));
   }
 
   @PostMapping("/generar/tema/{id}")
@@ -113,4 +114,3 @@ public class ResumenController {
     }
   }
 }
-

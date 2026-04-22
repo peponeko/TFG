@@ -16,6 +16,7 @@ import com.easy4you.service.ProgresoUsuarioService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,13 +43,11 @@ public class FlashcardController {
   private final ProgresoUsuarioService progresoUsuarioService;
 
   @PostMapping("/generar/{documentoId}")
-  public ResponseEntity<List<FlashcardResponseDTO>> generar(@PathVariable Long documentoId) {
+  public ResponseEntity<Map<String, String>> generar(@PathVariable Long documentoId) {
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
 
-    List<Flashcard> saved = flashcardGenerationService.generarParaDocumento(usuarioActual.getId(), documentoId);
-    List<FlashcardResponseDTO> response = saved.stream().map(this::toResponse).toList();
-
-    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    flashcardGenerationService.solicitarGeneracionParaDocumento(usuarioActual.getId(), documentoId);
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("status", "processing"));
   }
 
   @GetMapping("/documento/{documentoId}")
