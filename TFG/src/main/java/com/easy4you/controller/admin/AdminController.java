@@ -9,6 +9,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,7 @@ public class AdminController {
   private final DocumentoRepository documentoRepository;
 
   @GetMapping
+  @PreAuthorize("hasRole('ADMIN')")
   public String dashboard(Model model) {
     model.addAttribute("nav", "dashboard");
     model.addAttribute("totalUsuarios", usuarioRepository.count());
@@ -92,4 +94,3 @@ public class AdminController {
     return "admin/asignaturas";
   }
 }
-

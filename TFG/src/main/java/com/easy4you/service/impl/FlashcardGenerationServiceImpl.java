@@ -15,7 +15,6 @@ import com.easy4you.repository.FlashcardRepository;
 import com.easy4you.repository.UsuarioRepository;
 import com.easy4you.service.FlashcardGenerationService;
 import com.easy4you.service.ai.AiService;
-import com.easy4you.util.JsonExtractor;
 import com.easy4you.util.PromptTemplates;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +48,8 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
       "El documento aún no está procesado. Espera unos segundos y recarga la página.";
 
   private static final int NUM_FLASHCARDS = 10;
-  private static final int MAX_INPUT_CHARS = 12_000;
+  // Gemini 1.5 Flash soporta hasta 1M tokens: enviamos hasta 100k chars de texto
+  private static final int MAX_INPUT_CHARS = 100_000;
   private static final int KEYWORD_MAX = 6;
   private static final int CHUNKS_PER_KEYWORD = 20;
 
@@ -229,9 +229,8 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
 
     String input = truncate(documento.getTextoExtraido(), MAX_INPUT_CHARS);
     String prompt = PromptTemplates.formatFlashcards(input, NUM_FLASHCARDS);
-    String raw = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensFlashcards());
-
-    String jsonArray = JsonExtractor.extractFirstJsonArray(raw);
+    // Gemini JSON Mode → devuelve JSON puro, sin necesidad de JsonExtractor
+    String jsonArray = aiService.generarJson(prompt);
     if (jsonArray == null || jsonArray.isBlank()) {
       throw new ServiceUnavailableException("La IA no devolvió un JSON válido para flashcards");
     }

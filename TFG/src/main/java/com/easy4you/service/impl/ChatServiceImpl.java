@@ -268,24 +268,7 @@ public class ChatServiceImpl implements ChatService {
     List<Long> documentoIds = documentosActivos.stream().map(Documento::getId).toList();
     List<DocumentoChunk> chunks = retrieveRelevantChunks(contenido, documentoIds, maxChunks);
 
-    String assistantContent;
-    if (chunks.isEmpty()) {
-      assistantContent = "No encuentro información sobre esto en los documentos proporcionados";
-    } else {
-      String chunksText = buildChunksContext(chunks);
-      String historyText = buildRecentHistory(conversacionId);
-      String contexto = chunksText;
-      if (!historyText.isBlank()) {
-        contexto += "\n\nHISTORIAL RECIENTE (no es fuente, solo contexto conversacional):\n" + historyText;
-      }
-      contexto = truncate(contexto, MAX_INPUT_CHARS_CHAT);
-
-      String prompt = PromptTemplates.formatChat(contexto, contenido);
-      assistantContent = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensChat());
-      if (assistantContent == null || assistantContent.isBlank()) {
-        throw new ServiceUnavailableException("La IA no devolvió una respuesta válida. Inténtalo de nuevo.");
-      }
-    }
+    String assistantContent = generarContenidoAsistente(conversacionId, contenido, chunks);
 
     List<Long> chunkIds = chunks.stream().map(DocumentoChunk::getId).filter(Objects::nonNull).toList();
     String sourcesJson = toJsonSilently(chunkIds);
@@ -313,6 +296,28 @@ public class ChatServiceImpl implements ChatService {
         chunks.size());
 
     return new ChatSendMessageResult(userMessage, assistantMessage, sources);
+  }
+
+  private String generarContenidoAsistente(
+      Long conversacionId, String contenido, List<DocumentoChunk> chunks) {
+    if (chunks.isEmpty()) {
+      return "No encuentro información sobre esto en los documentos proporcionados";
+    }
+
+    String chunksText = buildChunksContext(chunks);
+    String historyText = buildRecentHistory(conversacionId);
+    String contexto = chunksText;
+    if (!historyText.isBlank()) {
+      contexto += "\n\nHISTORIAL RECIENTE (no es fuente, solo contexto conversacional):\n" + historyText;
+    }
+    contexto = truncate(contexto, MAX_INPUT_CHARS_CHAT);
+
+    String prompt = PromptTemplates.formatChat(contexto, contenido);
+    String assistantContent = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensChat());
+    if (assistantContent == null || assistantContent.isBlank()) {
+      throw new ServiceUnavailableException("La IA no devolvió una respuesta válida. Inténtalo de nuevo.");
+    }
+    return assistantContent;
   }
 
   @Override

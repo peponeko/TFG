@@ -4,25 +4,15 @@ import com.easy4you.dto.tema.TemaRapidoRequestDTO;
 import com.easy4you.dto.tema.TemaRequestDTO;
 import com.easy4you.dto.tema.TemaResponseDTO;
 import com.easy4you.exception.BadRequestException;
-import com.easy4you.exception.NotFoundException;
-import com.easy4you.model.entity.Asignatura;
-import com.easy4you.model.entity.ResultadoAprendizaje;
 import com.easy4you.model.entity.Tema;
-import com.easy4you.model.entity.Unidad;
 import com.easy4you.model.entity.Usuario;
-import com.easy4you.repository.AsignaturaRepository;
-import com.easy4you.repository.ResultadoAprendizajeRepository;
-import com.easy4you.repository.TemaRepository;
-import com.easy4you.repository.UnidadRepository;
 import com.easy4you.security.AuthenticatedUserService;
 import com.easy4you.service.TemaService;
-import com.easy4you.service.UnidadService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,30 +29,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class TemaController {
 
   private final TemaService temaService;
-  private final UnidadService unidadService;
   private final AuthenticatedUserService authenticatedUserService;
-  private final AsignaturaRepository asignaturaRepository;
-  private final ResultadoAprendizajeRepository resultadoAprendizajeRepository;
-  private final UnidadRepository unidadRepository;
-  private final TemaRepository temaRepository;
 
   @GetMapping
   public ResponseEntity<List<TemaResponseDTO>> listar(
       @RequestParam(required = false) Long unidadId, @RequestParam(required = false) Long asignaturaId) {
 
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
 
     List<Tema> temas;
     if (asignaturaId != null) {
-      if (asignaturaRepository.findByIdAndUsuarioId(asignaturaId, usuarioActual.getId()).isEmpty()) {
-        throw new NotFoundException("Asignatura no encontrada: " + asignaturaId);
-      }
-      temas = temaRepository.findByUnidadResultadoAprendizajeAsignaturaIdOrderByOrdenAsc(asignaturaId);
+      temas = temaService.listarPorAsignaturaIdDeUsuario(usuarioId, asignaturaId);
     } else if (unidadId != null) {
-      if (!unidadRepository.existsByIdAndResultadoAprendizajeAsignaturaUsuarioId(unidadId, usuarioActual.getId())) {
-        throw new NotFoundException("Unidad no encontrada: " + unidadId);
-      }
-      temas = temaService.listarPorUnidadId(unidadId);
+      temas = temaService.listarPorUnidadIdDeUsuario(usuarioId, unidadId);
     } else {
       throw new BadRequestException("unidadId o asignaturaId es obligatorio");
     }
@@ -73,63 +52,22 @@ public class TemaController {
 
   @GetMapping("/{id}")
   public ResponseEntity<TemaResponseDTO> obtener(@PathVariable Long id) {
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-    Tema tema =
-        temaRepository
-            .findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(id, usuarioActual.getId())
-            .orElseThrow(() -> new NotFoundException("Tema no encontrado: " + id));
-
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
+    Tema tema = temaService.obtenerPorIdDeUsuario(usuarioId, id);
     return ResponseEntity.ok(toResponse(tema));
   }
 
   @PostMapping
   public ResponseEntity<TemaResponseDTO> crear(@Valid @RequestBody TemaRequestDTO request) {
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-
-    Unidad unidad = resolveUnidadParaCrearTema(usuarioActual.getId(), request);
-
-    Tema tema = new Tema();
-    tema.setUnidad(unidad);
-    tema.setTitulo(request.getTitulo());
-    tema.setDescripcion(request.getDescripcion());
-    tema.setOrden(request.getOrden() != null ? request.getOrden() : 0);
-    tema.setPalabrasClave(request.getPalabrasClave());
-
-    Tema creado = temaService.crear(tema);
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
+    Tema creado = temaService.crearDeUsuario(usuarioId, request);
     return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(creado));
   }
 
   @PostMapping("/rapido")
-  @Transactional
   public ResponseEntity<TemaResponseDTO> crearRapido(@Valid @RequestBody TemaRapidoRequestDTO request) {
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-
-    if (request.getAsignaturaId() == null) {
-      throw new BadRequestException("asignaturaId es obligatorio");
-    }
-
-    Integer trimestre = request.getTrimestre();
-    if (trimestre != null && !(trimestre == 0 || trimestre == 1 || trimestre == 2 || trimestre == 3)) {
-      throw new BadRequestException("trimestre inválido. Usa 1, 2, 3 o 0/null");
-    }
-
-    Asignatura asignatura =
-        asignaturaRepository
-            .findByIdAndUsuarioId(request.getAsignaturaId(), usuarioActual.getId())
-            .orElseThrow(
-                () -> new NotFoundException("Asignatura no encontrada: " + request.getAsignaturaId()));
-
-    ResultadoAprendizaje ra = resolveResultadoAprendizajeTrimestre(asignatura, trimestre);
-    Unidad unidad = resolveUnidadPrincipal(ra);
-
-    Tema tema = new Tema();
-    tema.setUnidad(unidad);
-    tema.setTitulo(request.getTitulo());
-    tema.setDescripcion(request.getDescripcion());
-    tema.setOrden(0);
-    tema.setPalabrasClave(request.getPalabrasClave());
-
-    Tema creado = temaService.crear(tema);
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
+    Tema creado = temaService.crearRapidoDeUsuario(usuarioId, request);
     return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(creado));
   }
 
@@ -137,148 +75,16 @@ public class TemaController {
   public ResponseEntity<TemaResponseDTO> actualizar(
       @PathVariable Long id, @Valid @RequestBody TemaRequestDTO request) {
 
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-
-    Tema existente =
-        temaRepository
-            .findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(id, usuarioActual.getId())
-            .orElseThrow(() -> new NotFoundException("Tema no encontrado: " + id));
-
-    Tema datos = new Tema();
-    datos.setUnidad(existente.getUnidad());
-    datos.setTitulo(request.getTitulo());
-    datos.setDescripcion(request.getDescripcion());
-    datos.setOrden(request.getOrden() != null ? request.getOrden() : existente.getOrden());
-    datos.setPalabrasClave(request.getPalabrasClave());
-
-    if (request.getUnidadId() != null
-        && (existente.getUnidad() == null || !request.getUnidadId().equals(existente.getUnidad().getId()))) {
-      if (!unidadRepository.existsByIdAndResultadoAprendizajeAsignaturaUsuarioId(request.getUnidadId(), usuarioActual.getId())) {
-        throw new NotFoundException("Unidad no encontrada: " + request.getUnidadId());
-      }
-      datos.setUnidad(unidadService.obtenerPorId(request.getUnidadId()));
-    }
-
-    Tema actualizado = temaService.actualizar(id, datos);
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
+    Tema actualizado = temaService.actualizarDeUsuario(usuarioId, id, request);
     return ResponseEntity.ok(toResponse(actualizado));
   }
 
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-    Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-    if (temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(id, usuarioActual.getId()).isEmpty()) {
-      throw new NotFoundException("Tema no encontrado: " + id);
-    }
-
-    temaService.eliminar(id);
+    Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
+    temaService.eliminarDeUsuario(usuarioId, id);
     return ResponseEntity.noContent().build();
-  }
-
-  private Unidad resolveUnidadParaCrearTema(Long usuarioId, TemaRequestDTO request) {
-    if (request == null) {
-      throw new BadRequestException("Body es obligatorio");
-    }
-
-    if (request.getUnidadId() != null) {
-      if (!unidadRepository.existsByIdAndResultadoAprendizajeAsignaturaUsuarioId(request.getUnidadId(), usuarioId)) {
-        throw new NotFoundException("Unidad no encontrada: " + request.getUnidadId());
-      }
-      return unidadService.obtenerPorId(request.getUnidadId());
-    }
-
-    if (request.getAsignaturaId() == null) {
-      throw new BadRequestException("unidadId o asignaturaId es obligatorio");
-    }
-
-    Asignatura asignatura =
-        asignaturaRepository
-            .findByIdAndUsuarioId(request.getAsignaturaId(), usuarioId)
-            .orElseThrow(() -> new NotFoundException("Asignatura no encontrada: " + request.getAsignaturaId()));
-
-    ResultadoAprendizaje ra = resolveResultadoAprendizajePorDefecto(asignatura);
-    Unidad unidad = resolveUnidadPorDefecto(ra);
-    return unidad;
-  }
-
-  private ResultadoAprendizaje resolveResultadoAprendizajePorDefecto(Asignatura asignatura) {
-    List<ResultadoAprendizaje> ras =
-        resultadoAprendizajeRepository.findByAsignaturaIdOrderByOrdenAsc(asignatura.getId());
-    if (ras != null && !ras.isEmpty()) {
-      return ras.get(0);
-    }
-
-    ResultadoAprendizaje nuevo = new ResultadoAprendizaje();
-    nuevo.setAsignatura(asignatura);
-    nuevo.setCodigo("GEN");
-    nuevo.setDescripcion("Resultado de aprendizaje general (creado automáticamente)");
-    nuevo.setOrden(0);
-    return resultadoAprendizajeRepository.save(nuevo);
-  }
-
-  private Unidad resolveUnidadPorDefecto(ResultadoAprendizaje ra) {
-    List<Unidad> unidades = unidadRepository.findByResultadoAprendizajeIdOrderByOrdenAsc(ra.getId());
-    if (unidades != null && !unidades.isEmpty()) {
-      return unidades.get(0);
-    }
-
-    Unidad unidad = new Unidad();
-    unidad.setResultadoAprendizaje(ra);
-    unidad.setTitulo("General");
-    unidad.setDescripcion("Unidad por defecto (creada automáticamente)");
-    unidad.setOrden(0);
-    return unidadRepository.save(unidad);
-  }
-
-  private ResultadoAprendizaje resolveResultadoAprendizajeTrimestre(Asignatura asignatura, Integer trimestre) {
-    if (asignatura == null || asignatura.getId() == null) {
-      throw new BadRequestException("Asignatura inválida");
-    }
-
-    if (trimestre == null || trimestre == 0) {
-      return resultadoAprendizajeRepository
-          .findTopByAsignaturaIdAndCodigoIgnoreCaseOrderByIdAsc(asignatura.getId(), "GEN")
-          .orElseGet(
-              () -> {
-                ResultadoAprendizaje nuevo = new ResultadoAprendizaje();
-                nuevo.setAsignatura(asignatura);
-                nuevo.setCodigo("GEN");
-                nuevo.setDescripcion("General");
-                nuevo.setOrden(0);
-                return resultadoAprendizajeRepository.save(nuevo);
-              });
-    }
-
-    String codigo = "T" + trimestre;
-    return resultadoAprendizajeRepository
-        .findTopByAsignaturaIdAndCodigoIgnoreCaseOrderByIdAsc(asignatura.getId(), codigo)
-        .orElseGet(
-            () -> {
-              ResultadoAprendizaje nuevo = new ResultadoAprendizaje();
-              nuevo.setAsignatura(asignatura);
-              nuevo.setCodigo(codigo);
-              nuevo.setDescripcion("Trimestre " + trimestre);
-              nuevo.setOrden(trimestre);
-              return resultadoAprendizajeRepository.save(nuevo);
-            });
-  }
-
-  private Unidad resolveUnidadPrincipal(ResultadoAprendizaje ra) {
-    if (ra == null || ra.getId() == null) {
-      throw new BadRequestException("Resultado de aprendizaje inválido");
-    }
-
-    return unidadRepository.findByResultadoAprendizajeIdOrderByOrdenAsc(ra.getId()).stream()
-        .filter(u -> u.getTitulo() != null && u.getTitulo().trim().equalsIgnoreCase("Unidad Principal"))
-        .findFirst()
-        .orElseGet(
-            () -> {
-              Unidad unidad = new Unidad();
-              unidad.setResultadoAprendizaje(ra);
-              unidad.setTitulo("Unidad Principal");
-              unidad.setDescripcion(null);
-              unidad.setOrden(1);
-              return unidadRepository.save(unidad);
-            });
   }
 
   private TemaResponseDTO toResponse(Tema tema) {

@@ -33,6 +33,7 @@ import org.springframework.security.web.util.matcher.OrRequestMatcher;
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+// Configura la seguridad: JWT para la API REST y formulario para el panel admin
 public class SecurityConfig {
 
   private final JwtFilter jwtFilter;

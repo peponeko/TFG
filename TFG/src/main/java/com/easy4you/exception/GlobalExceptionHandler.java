@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackages = "com.easy4you.controller.api")
+// Captura todas las excepciones de la aplicación y devuelve respuestas JSON con el error
 public class GlobalExceptionHandler {
 
   @ExceptionHandler(NotFoundException.class)

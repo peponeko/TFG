@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
+// Clase base que añade createdAt y updatedAt automáticamente a las entidades
 @Getter
 @Setter
 @MappedSuperclass
@@ -35,4 +36,3 @@ public abstract class BaseAuditableEntity {
     updatedAt = LocalDateTime.now();
   }
 }
-

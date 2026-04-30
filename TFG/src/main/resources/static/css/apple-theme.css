@@ -245,13 +245,19 @@
 }
 
 .apple-header-inner {
-  max-width: 1100px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 14px 22px;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+@media (min-width: 1400px) {
+  .apple-header-inner {
+    padding: 14px 48px;
+  }
 }
 
 .apple-logo {
@@ -580,14 +586,173 @@
 
 .notebook-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(260px, 320px);
-  gap: 14px;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 300px);
+  gap: 16px;
+  align-items: start;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1100px) {
   .notebook-layout {
     grid-template-columns: 1fr;
   }
+}
+
+/* Contenedor full-width para notebook */
+.notebook-full-container {
+  max-width: 100%;
+  margin: 0;
+  padding: 0 24px 40px;
+}
+
+@media (min-width: 1400px) {
+  .notebook-full-container {
+    padding: 0 48px 40px;
+  }
+}
+
+/* Visor de texto plano para resúmenes */
+.resumen-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.2s ease;
+}
+
+.resumen-viewer {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 800px;
+  width: calc(100% - 48px);
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.resumen-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--apple-separator);
+  flex-shrink: 0;
+}
+
+.resumen-viewer-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--apple-text);
+  margin: 0;
+}
+
+.resumen-viewer-close {
+  background: var(--apple-bg-secondary);
+  border: none;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--apple-text-secondary);
+  transition: background var(--apple-transition);
+}
+
+.resumen-viewer-close:hover {
+  background: #e5e5ea;
+}
+
+.resumen-viewer-content {
+  margin-top: 16px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 8px;
+}
+
+.resumen-viewer-content p,
+.resumen-viewer-content div {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--apple-text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.resumen-viewer-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.resumen-viewer-content::-webkit-scrollbar-thumb {
+  background: var(--apple-separator);
+  border-radius: 3px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mejorar tarjetas de resúmenes */
+.resumen-card {
+  background: var(--apple-bg);
+  border: 1px solid var(--apple-separator);
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all var(--apple-transition);
+}
+
+.resumen-card:hover {
+  background: var(--apple-bg-secondary);
+  transform: translateY(-2px);
+  box-shadow: var(--apple-shadow-sm);
+}
+
+.resumen-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--apple-text);
+  margin-bottom: 6px;
+}
+
+.resumen-card-preview {
+  font-size: 12px;
+  color: var(--apple-text-secondary);
+  line-height: 1.5;
+}
+
+.resumen-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--apple-blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity var(--apple-transition);
+}
+
+.resumen-view-btn:hover {
+  opacity: 0.7;
 }
 
 .fab-menu {

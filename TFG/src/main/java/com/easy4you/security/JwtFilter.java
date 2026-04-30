@@ -18,6 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 @RequiredArgsConstructor
+// Intercepta cada petición HTTP y valida el token JWT del header Authorization
 public class JwtFilter extends OncePerRequestFilter {
 
   private final JwtUtil jwtUtil;

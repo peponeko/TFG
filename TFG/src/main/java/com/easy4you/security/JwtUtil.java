@@ -20,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 @Component
+// Genera y valida tokens JWT usando la clave secreta configurada
 public class JwtUtil {
 
   @Value("${app.jwt.secret}")
@@ -90,4 +91,3 @@ public class JwtUtil {
     return Keys.hmacShaKeyFor(keyBytes);
   }
 }
-

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
+// Carga datos iniciales (roles y usuario admin) al arrancar la aplicación
 public class DataLoader implements CommandLineRunner {
 
   private static final Logger log = LoggerFactory.getLogger(DataLoader.class);

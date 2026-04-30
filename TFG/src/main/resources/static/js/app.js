@@ -110,6 +110,49 @@
     return close;
   }
 
+  // Visor de texto plano para resúmenes
+  function openResumenViewer(title, content) {
+    const root = qs("modal-root");
+    if (!root) return () => {};
+
+    root.classList.remove("hidden");
+    root.innerHTML = `
+      <div class="resumen-viewer-overlay">
+        <div class="resumen-viewer">
+          <div class="resumen-viewer-header">
+            <h2 class="resumen-viewer-title">${title || "Resumen"}</h2>
+            <button id="resumen-viewer-close" class="resumen-viewer-close" title="Cerrar">✕</button>
+          </div>
+          <div class="resumen-viewer-content">
+            <div>${content || "Sin contenido"}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const close = () => {
+      root.innerHTML = "";
+      root.classList.add("hidden");
+    };
+
+    const closeBtn = qs("resumen-viewer-close");
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    root.querySelector(".resumen-viewer-overlay")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) close();
+    });
+
+    // Permitir cerrar con Escape
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
+        close();
+        document.removeEventListener("keydown", escHandler);
+      }
+    };
+    document.addEventListener("keydown", escHandler);
+
+    return close;
+  }
+
   function buildApiHeaders(extra = {}) {
     const token = getToken();
     const headers = { Accept: "application/json", ...extra };
@@ -646,7 +689,7 @@
 
       if (resumenesList) {
         resumenesList.innerHTML = "";
-        const items = Array.isArray(data.resumenes) ? data.resumenes.slice(0, 3) : [];
+        const items = Array.isArray(data.resumenes) ? data.resumenes.slice(0, 5) : [];
         if (!items.length) {
           const p = document.createElement("p");
           p.className = "text-sm text-slate-500";
@@ -655,15 +698,28 @@
         } else {
           items.forEach((r) => {
             const el = document.createElement("div");
-            el.className = "rounded-xl border border-slate-800 bg-slate-950/20 p-3";
+            el.className = "resumen-card";
+            
             const t = document.createElement("p");
-            t.className = "text-sm font-semibold";
+            t.className = "resumen-card-title";
             t.textContent = truncate(r.titulo || "Resumen", 80);
+            
             const c = document.createElement("p");
-            c.className = "mt-1 text-xs text-slate-400";
-            c.textContent = truncate(r.contenido || "", 110);
+            c.className = "resumen-card-preview";
+            c.textContent = truncate(r.contenido || "", 120);
+            
+            const viewBtn = document.createElement("button");
+            viewBtn.className = "resumen-view-btn";
+            viewBtn.innerHTML = "📖 Ver resumen completo";
+            viewBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openResumenViewer(r.titulo || "Resumen", r.contenido || "");
+            });
+            
             el.appendChild(t);
             el.appendChild(c);
+            el.appendChild(viewBtn);
             resumenesList.appendChild(el);
           });
         }

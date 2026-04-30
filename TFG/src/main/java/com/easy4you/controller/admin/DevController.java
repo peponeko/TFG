@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +91,7 @@ public class DevController {
    * Visita: http://localhost:8080/dev/reset-admin
    */
   @GetMapping("/reset-admin")
+  @PreAuthorize("hasRole('ADMIN')")
   @Transactional
   public String resetAdmin(RedirectAttributes redirectAttributes) {
     Usuario admin = usuarioRepository.findByEmail("admin@easy4you.com").orElse(null);

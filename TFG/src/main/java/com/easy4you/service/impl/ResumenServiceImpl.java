@@ -1,9 +1,14 @@
 package com.easy4you.service.impl;
 
 import com.easy4you.exception.NotFoundException;
+import com.easy4you.model.entity.Documento;
 import com.easy4you.model.entity.Resumen;
+import com.easy4you.repository.DocumentoRepository;
 import com.easy4you.repository.ResumenRepository;
+import com.easy4you.repository.TemaRepository;
 import com.easy4you.service.ResumenService;
+import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ResumenServiceImpl implements ResumenService {
 
   private final ResumenRepository resumenRepository;
+  private final DocumentoRepository documentoRepository;
+  private final TemaRepository temaRepository;
 
   @Override
   public Resumen crear(Resumen resumen) {
@@ -45,5 +52,29 @@ public class ResumenServiceImpl implements ResumenService {
     }
     resumenRepository.deleteById(id);
   }
-}
 
+  @Override
+  @Transactional(readOnly = true)
+  public List<Resumen> listarPorDocumento(Long usuarioId, Long documentoId) {
+    Documento documento =
+        documentoRepository
+            .findByIdAndUsuarioId(documentoId, usuarioId)
+            .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
+
+    return resumenRepository.findByDocumentoIdOrderByCreatedAtDesc(documento.getId()).stream()
+        .filter(r -> r.getUsuario() != null && Objects.equals(r.getUsuario().getId(), usuarioId))
+        .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Resumen> listarPorTema(Long usuarioId, Long temaId) {
+    if (temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
+      throw new NotFoundException("Tema no encontrado: " + temaId);
+    }
+
+    return resumenRepository.findByTemaIdOrderByCreatedAtDesc(temaId).stream()
+        .filter(r -> r.getUsuario() != null && Objects.equals(r.getUsuario().getId(), usuarioId))
+        .toList();
+  }
+}
