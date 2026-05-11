@@ -21,6 +21,7 @@ import com.easy4you.service.ResumenGenerationService;
 import com.easy4you.service.TemaService;
 import com.easy4you.service.ai.AiService;
 import com.easy4you.util.PromptTemplates;
+import com.easy4you.util.TextUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
@@ -196,11 +197,8 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
     Tema tema = temaService.obtenerPorId(temaId);
 
     Long temaUsuarioId =
-        tema.getUnidad() != null
-                && tema.getUnidad().getResultadoAprendizaje() != null
-                && tema.getUnidad().getResultadoAprendizaje().getAsignatura() != null
-                && tema.getUnidad().getResultadoAprendizaje().getAsignatura().getUsuario() != null
-            ? tema.getUnidad().getResultadoAprendizaje().getAsignatura().getUsuario().getId()
+        tema.getAsignatura() != null && tema.getAsignatura().getUsuario() != null
+            ? tema.getAsignatura().getUsuario().getId()
             : null;
 
     if (temaUsuarioId == null || !usuarioId.equals(temaUsuarioId)) {
@@ -244,24 +242,14 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
 
   @Override
   public ArtefactoGenerado generarResumenConArtefacto(Long usuarioId, Long documentoId) {
-    // Primero generar el resumen usando el método existente
     Resumen resumen = generarResumenDocumento(usuarioId, documentoId);
 
-    // Obtener el documento para saber la asignatura
-    Documento documento = documentoRepository.findById(documentoId)
-        .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + documentoId));
-
-    Long asignaturaId = documento.getAsignatura() != null 
-        ? documento.getAsignatura().getId() 
-        : null;
-
-    if (asignaturaId == null) {
+    if (resumen.getTema() == null || resumen.getTema().getAsignatura() == null) {
       throw new BadRequestException("El documento no tiene asignatura");
     }
 
-    // Crear el artefacto generado
     ArtefactoGenerado artefacto = new ArtefactoGenerado();
-    artefacto.setAsignatura(resumen.getTema().getUnidad().getResultadoAprendizaje().getAsignatura());
+    artefacto.setAsignatura(resumen.getTema().getAsignatura());
     artefacto.setTipo(TipoArtefactoGenerado.RESUMEN);
     artefacto.setEstado(EstadoArtefactoGenerado.LISTO);
     artefacto.setMetadatosJson(toJsonSilently(Map.of(
@@ -272,7 +260,6 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
 
     ArtefactoGenerado savedArtefacto = artefactoGeneradoRepository.save(artefacto);
     log.info("Artefacto de resumen generado: artefactoId={}, resumenId={}", savedArtefacto.getId(), resumen.getId());
-
     return savedArtefacto;
   }
 
@@ -362,14 +349,7 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
   }
 
   private String truncate(String text, int maxChars) {
-    if (text == null) {
-      return "";
-    }
-    String t = text.trim();
-    if (t.length() <= maxChars) {
-      return t;
-    }
-    return t.substring(0, Math.max(0, maxChars - 1)).trim() + "…";
+    return TextUtils.truncate(text, maxChars);
   }
 
   private String toJsonSilently(Object obj) {

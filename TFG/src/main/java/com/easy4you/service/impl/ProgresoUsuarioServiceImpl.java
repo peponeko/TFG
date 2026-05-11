@@ -102,7 +102,7 @@ public class ProgresoUsuarioServiceImpl implements ProgresoUsuarioService {
     }
 
     temaRepository
-        .findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId)
+        .findByIdAndAsignaturaUsuarioId(temaId, usuarioId)
         .orElseThrow(() -> new NotFoundException("Tema no encontrado: " + temaId));
 
     ProgresoTema progreso = progresoTemaRepository.findByUsuarioIdAndTemaId(usuarioId, temaId).orElse(null);
@@ -268,13 +268,10 @@ public class ProgresoUsuarioServiceImpl implements ProgresoUsuarioService {
   }
 
   private Asignatura resolveAsignaturaFromTema(Tema tema) {
-    if (tema == null
-        || tema.getUnidad() == null
-        || tema.getUnidad().getResultadoAprendizaje() == null
-        || tema.getUnidad().getResultadoAprendizaje().getAsignatura() == null) {
+    if (tema == null || tema.getAsignatura() == null || tema.getAsignatura().getId() == null) {
       return null;
     }
-    return tema.getUnidad().getResultadoAprendizaje().getAsignatura();
+    return tema.getAsignatura();
   }
 
   private SesionEstudioResponseDTO toSesionResponse(SesionEstudio s) {

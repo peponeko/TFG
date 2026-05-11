@@ -8,7 +8,6 @@ import com.easy4you.dto.documento.DocumentoChunksPageResponseDTO;
 import com.easy4you.dto.documento.DocumentoResponseDTO;
 import com.easy4you.dto.documento.DocumentoUploadResponseDTO;
 import com.easy4you.exception.BadRequestException;
-import com.easy4you.exception.NotFoundException;
 import com.easy4you.mapper.DocumentoMapper;
 import com.easy4you.model.entity.Asignatura;
 import com.easy4you.model.entity.Documento;
@@ -56,7 +55,9 @@ public class DocumentoController {
 
   @GetMapping
   public ResponseEntity<List<DocumentoResponseDTO>> listar(
-      @RequestParam(required = false) Long usuarioId, @RequestParam(required = false) Long temaId) {
+      @RequestParam(required = false) Long usuarioId,
+      @RequestParam(required = false) Long temaId,
+      @RequestParam(required = false) Long asignaturaId) {
 
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
 
@@ -66,6 +67,8 @@ public class DocumentoController {
           documentoService.listarPorTemaId(temaId).stream()
               .filter(d -> d.getUsuario() != null && usuarioActual.getId().equals(d.getUsuario().getId()))
               .toList();
+    } else if (asignaturaId != null) {
+      documentos = documentoService.listarPorAsignaturaIdDeUsuario(usuarioActual.getId(), asignaturaId);
     } else {
       documentos = documentoService.listarPorUsuarioId(usuarioActual.getId());
     }

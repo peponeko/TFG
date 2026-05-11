@@ -42,7 +42,7 @@ public class DataLoader implements CommandLineRunner {
 
     Usuario admin =
         usuarioRepository
-            .findByEmail(ADMIN_EMAIL)
+            .findTopByEmailOrderByIdAsc(ADMIN_EMAIL)
             .orElseGet(
                 () -> {
                   Usuario u = new Usuario();

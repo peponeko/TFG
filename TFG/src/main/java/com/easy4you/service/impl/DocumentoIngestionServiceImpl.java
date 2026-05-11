@@ -264,15 +264,10 @@ public class DocumentoIngestionServiceImpl implements DocumentoIngestionService 
 
     Tema tema = temaService.obtenerPorId(temaId);
 
-    Long temaAsignaturaId =
-        tema.getUnidad().getResultadoAprendizaje().getAsignatura() != null
-            ? tema.getUnidad().getResultadoAprendizaje().getAsignatura().getId()
-            : null;
-
+    Long temaAsignaturaId = tema.getAsignatura() != null ? tema.getAsignatura().getId() : null;
     Long temaUsuarioId =
-        tema.getUnidad().getResultadoAprendizaje().getAsignatura() != null
-                && tema.getUnidad().getResultadoAprendizaje().getAsignatura().getUsuario() != null
-            ? tema.getUnidad().getResultadoAprendizaje().getAsignatura().getUsuario().getId()
+        tema.getAsignatura() != null && tema.getAsignatura().getUsuario() != null
+            ? tema.getAsignatura().getUsuario().getId()
             : null;
 
     if (temaAsignaturaId == null || temaUsuarioId == null) {

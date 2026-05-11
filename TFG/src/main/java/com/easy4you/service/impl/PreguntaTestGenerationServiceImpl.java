@@ -1,6 +1,5 @@
 package com.easy4you.service.impl;
 
-import com.easy4you.config.AiProperties;
 import com.easy4you.exception.BadRequestException;
 import com.easy4you.exception.NotFoundException;
 import com.easy4you.exception.ServiceUnavailableException;
@@ -17,6 +16,7 @@ import com.easy4you.repository.UsuarioRepository;
 import com.easy4you.service.PreguntaTestGenerationService;
 import com.easy4you.service.ai.AiService;
 import com.easy4you.util.PromptTemplates;
+import com.easy4you.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.text.Normalizer;
@@ -126,7 +126,6 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
   private final DocumentoChunkRepository documentoChunkRepository;
   private final PreguntaTestRepository preguntaTestRepository;
   private final AiService aiService;
-  private final AiProperties aiProperties;
   private final ObjectMapper objectMapper;
   private final TaskExecutor taskExecutor;
 
@@ -346,7 +345,7 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
 
     for (String kw : keywords) {
       Page<DocumentoChunk> page =
-          documentoChunkRepository.findByDocumentoIdInAndTextoContainingIgnoreCase(
+          documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
               List.of(documentoId), kw, PageRequest.of(0, CHUNKS_PER_KEYWORD));
       for (DocumentoChunk chunk : page.getContent()) {
         if (chunk == null || chunk.getId() == null) {
@@ -431,29 +430,15 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
   }
 
   private String truncate(String text, int maxChars) {
-    if (text == null) {
-      return "";
-    }
-    String t = text.trim();
-    if (t.length() <= maxChars) {
-      return t;
-    }
-    return t.substring(0, Math.max(0, maxChars - 1)).trim() + "…";
+    return TextUtils.truncate(text, maxChars);
   }
 
   private String safeTrim(String s) {
-    return s == null ? "" : s.trim();
+    return TextUtils.safeTrim(s);
   }
 
   private String trimToMax(String s, int max) {
-    if (s == null) {
-      return "";
-    }
-    String t = s.trim();
-    if (t.length() <= max) {
-      return t;
-    }
-    return t.substring(0, Math.max(0, max - 1)).trim() + "…";
+    return TextUtils.truncate(s, max);
   }
 
   private record PreguntaGenerated(

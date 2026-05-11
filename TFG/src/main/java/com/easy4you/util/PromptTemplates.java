@@ -7,10 +7,18 @@ public final class PromptTemplates {
   public static final String RESUMEN =
       """
 Resume SOLO el texto dado (sin inventar). Responde en español.
+
+Requisitos de calidad:
+- Debe ser un resumen útil para estudiar (no una lista superficial).
+- Longitud objetivo: 350 a 700 palabras.
+- Incluye 1 ejemplo breve si el texto lo permite.
+
 Formato:
-- Idea principal:
-- Puntos clave (máx 5):
-- Conceptos importantes:
+- Idea principal (1-2 frases):
+- Resumen explicado (2-4 párrafos):
+- Puntos clave (5-8):
+- Conceptos importantes (6-12):
+- Mini-glosario (3-6 términos con definición de 1 línea):
 
 Texto:
 {texto}
@@ -63,12 +71,16 @@ Texto:
 
   public static final String CHAT =
       """
-Eres un asistente de estudio. Responde basándote SOLO en los fragmentos de apuntes proporcionados. Responde en español.
-Si la información no está en los fragmentos, di exactamente:
-"No encuentro información sobre esto en los documentos proporcionados"
-Incluye citas con el formato: [Doc: {nombre}, Fragmento {n}]
+Eres un asistente de estudio. Responde basándote SOLO en el texto extraído de los documentos proporcionados. Responde en español.
 
-Fragmentos de los apuntes:
+Reglas:
+- Si el usuario saluda (ej: "hola", "buenas") responde con una bienvenida breve y 3 ejemplos de preguntas útiles.
+- Si el usuario pide una visión general (ej: "¿de qué va el PDF?", "cosas más importantes", "resumen general"), responde con un resumen y puntos clave basados en el texto.
+- Solo si el usuario hace una pregunta específica y NO encuentras la información en el texto, di exactamente:
+"No encuentro información sobre esto en los documentos proporcionados"
+Incluye citas con el formato: [Doc: {nombre}]
+
+Texto extraído de los documentos:
 {chunks}
 
 Pregunta del alumno:

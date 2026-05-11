@@ -19,6 +19,7 @@ public class AiProperties {
   private final Ollama ollama = new Ollama();
   private final Gemini gemini = new Gemini();
   private final Groq groq = new Groq();
+  private final OpenAi openai = new OpenAi();
 
   @Getter
   @Setter
@@ -39,6 +40,20 @@ public class AiProperties {
   public static class Groq {
     private String apiKey = "";
     private String model = "llama3-8b-8192";
+  }
+
+  @Getter
+  @Setter
+  public static class OpenAi {
+    /**
+     * Recomendado: inyectar vía variable de entorno, ej: ${OPENAI_API_KEY:}
+     */
+    private String apiKey = "";
+
+    /**
+     * Modelo por defecto para demo DAM: rápido y económico.
+     */
+    private String model = "gpt-4o-mini";
   }
 }
 

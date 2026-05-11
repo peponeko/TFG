@@ -25,6 +25,12 @@ public class DocumentoResponseDTO {
   private String checksumSha256;
   private Integer paginas;
 
+  /**
+   * Vista previa (recortada) del texto extraído.
+   * Para demo DAM: la IA "lee" este texto.
+   */
+  private String textoExtraidoPreview;
+
   private EstadoProcesadoDocumento estadoProcesado;
   private String errorExtraccion;
   private LocalDateTime createdAt;

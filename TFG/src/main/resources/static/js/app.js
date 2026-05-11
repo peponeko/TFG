@@ -110,21 +110,26 @@
     return close;
   }
 
-  // Visor de texto plano para resúmenes
   function openResumenViewer(title, content) {
     const root = qs("modal-root");
     if (!root) return () => {};
+
+    const safeTitle = title || "Resumen";
+    const safeContent = content || "Sin contenido";
 
     root.classList.remove("hidden");
     root.innerHTML = `
       <div class="resumen-viewer-overlay">
         <div class="resumen-viewer">
           <div class="resumen-viewer-header">
-            <h2 class="resumen-viewer-title">${title || "Resumen"}</h2>
-            <button id="resumen-viewer-close" class="resumen-viewer-close" title="Cerrar">✕</button>
+            <h2 class="resumen-viewer-title">${safeTitle}</h2>
+            <div style="display:flex; gap:8px;">
+              <button id="resumen-viewer-copy" class="apple-btn-secondary" style="padding:8px 12px; font-size:12px;" title="Copiar contenido">Copiar</button>
+              <button id="resumen-viewer-close" class="resumen-viewer-close" title="Cerrar">✕</button>
+            </div>
           </div>
           <div class="resumen-viewer-content">
-            <div>${content || "Sin contenido"}</div>
+            <div>${safeContent}</div>
           </div>
         </div>
       </div>
@@ -133,21 +138,25 @@
     const close = () => {
       root.innerHTML = "";
       root.classList.add("hidden");
+      document.removeEventListener("keydown", escHandler);
     };
 
-    const closeBtn = qs("resumen-viewer-close");
-    if (closeBtn) closeBtn.addEventListener("click", close);
+    const escHandler = (e) => {
+      if (e.key === "Escape") close();
+    };
+
+    qs("resumen-viewer-close")?.addEventListener("click", close);
+    qs("resumen-viewer-copy")?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(safeContent);
+        toast("Resumen copiado al portapapeles", "success");
+      } catch {
+        toast("No se pudo copiar", "error");
+      }
+    });
     root.querySelector(".resumen-viewer-overlay")?.addEventListener("click", (event) => {
       if (event.target === event.currentTarget) close();
     });
-
-    // Permitir cerrar con Escape
-    const escHandler = (e) => {
-      if (e.key === "Escape") {
-        close();
-        document.removeEventListener("keydown", escHandler);
-      }
-    };
     document.addEventListener("keydown", escHandler);
 
     return close;
@@ -192,45 +201,20 @@
     return payload;
   }
 
-  let warnedExpiry = false;
-
-  function parseJwtPayload(token) {
-    try {
-      const parts = String(token || "").split(".");
-      if (parts.length < 2) return null;
-      const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      const padded = b64 + "===".slice((b64.length + 3) % 4);
-      const json = atob(padded);
-      const payload = JSON.parse(json);
-      return payload && typeof payload === "object" ? payload : null;
-    } catch {
-      return null;
-    }
-  }
-
+  // Comprobación simple de expiración del JWT (exp en segundos).
   function checkTokenExpiry() {
     const token = getToken();
     if (!token) return;
-
-    const payload = parseJwtPayload(token);
-    const exp = payload?.exp;
-    if (!exp || typeof exp !== "number") return;
-
-    const now = Date.now() / 1000;
-    const diff = exp - now;
-    if (diff <= 0) {
-      clearAuth();
-      window.location.href = "/app/login?expired=1";
-      return;
-    }
-
-    if (diff < 300) {
-      if (!warnedExpiry) {
-        warnedExpiry = true;
-        toast("Tu sesión expirará pronto. Guarda tu trabajo.", "warning");
+    try {
+      const parts = token.split(".");
+      if (parts.length < 2) return;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+      if (typeof payload?.exp === "number" && payload.exp * 1000 < Date.now()) {
+        clearAuth();
+        window.location.href = "/app/login?expired=1";
       }
-    } else {
-      warnedExpiry = false;
+    } catch {
+      // token mal formado: lo ignoramos, el backend ya devolverá 401
     }
   }
 
@@ -243,28 +227,18 @@
   }
 
   async function pollDocumentoEstado(documentoId, onDone, onError) {
-    const maxIntentos = 60;
-    let intentos = 0;
-    while (intentos < maxIntentos) {
+    for (let i = 0; i < 60; i++) {
       try {
         const estado = await apiFetch(`/api/documentos/${documentoId}/estado`);
         const actual = (estado?.estadoProcesado || "").toUpperCase();
-        if (actual === "LISTO" || actual === "PROCESADO") {
-          onDone?.(estado);
-          return;
-        }
-        if (actual === "ERROR") {
-          onError?.(estado?.error || "Error procesando el documento");
-          return;
-        }
+        if (actual === "LISTO" || actual === "PROCESADO") return onDone?.(estado);
+        if (actual === "ERROR") return onError?.(estado?.error || "Error procesando el documento");
       } catch (err) {
-        onError?.(err.message || "No se pudo consultar el estado del documento");
-        return;
+        return onError?.(err.message || "No se pudo consultar el estado del documento");
       }
-      intentos += 1;
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
-    onError?.("La generación está tardando mucho. Comprueba que Ollama está activo.");
+    onError?.("La generación está tardando mucho. Vuelve a intentarlo en unos segundos.");
   }
 
   window.addEventListener("unhandledrejection", (event) => {
@@ -276,10 +250,10 @@
 
   function fmtEstadoDocumento(estado) {
     const e = (estado || "").toUpperCase();
-    if (e === "PROCESADO" || e === "LISTO") return { label: "Procesado", cls: "bg-emerald-950/40 text-emerald-200 border-emerald-900/50" };
-    if (e === "PROCESANDO") return { label: "Procesando", cls: "bg-amber-950/40 text-amber-200 border-amber-900/50" };
-    if (e === "ERROR") return { label: "Error", cls: "bg-rose-950/40 text-rose-200 border-rose-900/50" };
-    return { label: e || "Pendiente", cls: "bg-slate-950/40 text-slate-200 border-slate-800" };
+    if (e === "PROCESADO" || e === "LISTO") return { label: "Procesado", cls: "apple-chip apple-badge-done" };
+    if (e === "PROCESANDO") return { label: "Procesando", cls: "apple-chip apple-badge-processing" };
+    if (e === "ERROR") return { label: "Error", cls: "apple-chip apple-badge-error" };
+    return { label: e || "Pendiente", cls: "apple-chip apple-badge-pending" };
   }
 
   function truncate(text, max = 180) {
@@ -512,20 +486,20 @@
       const close = openModal(
         "Nuevo notebook",
         `
-        <form id="create-notebook-form" class="space-y-3">
+        <form id="create-notebook-form" style="display:flex; flex-direction:column; gap:10px;">
           <div>
-            <label class="block text-xs font-medium text-slate-400">Nombre</label>
-            <input id="nb-nombre" required class="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500" placeholder="Ej: Redes 1" />
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Nombre</label>
+            <input id="nb-nombre" required class="apple-input" placeholder="Ej: Redes 1" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400">Descripción</label>
-            <textarea id="nb-descripcion" rows="3" class="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500" placeholder="Opcional"></textarea>
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Descripción</label>
+            <textarea id="nb-descripcion" rows="3" class="apple-input" placeholder="Opcional"></textarea>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400">Color</label>
-            <input id="nb-color" type="color" value="#6D4CFF" class="mt-1.5 h-10 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-2" />
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Color</label>
+            <input id="nb-color" type="color" value="#0071e3" class="apple-input" style="height: 40px; padding: 4px;" />
           </div>
-          <button type="submit" class="mt-2 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500">Crear</button>
+          <button type="submit" class="apple-btn-primary">Crear</button>
         </form>
       `
       );
@@ -567,6 +541,10 @@
       return;
     }
 
+    const temaIdRaw = new URLSearchParams(window.location.search).get("temaId");
+    const temaId = temaIdRaw != null && temaIdRaw !== "" ? Number(temaIdRaw) : null;
+    const hasTemaId = temaId != null && Number.isFinite(temaId) && temaId > 0;
+
     const sourcesList = qs("sources-list");
     const sourcesSearch = qs("sources-search");
     const notebookTitle = qs("notebook-title");
@@ -606,18 +584,17 @@
 
     function setActiveTab(which) {
       const isChat = which === "chat";
+      const baseCls = "apple-btn-secondary";
+      const baseStyle = "padding:8px 12px; font-size:12px;";
       if (tabChat) {
         tabChat.dataset.active = isChat ? "true" : "false";
-        tabChat.className = isChat
-          ? "rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-100 bg-slate-950/40"
-          : "rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400";
+        tabChat.className = baseCls;
+        tabChat.setAttribute("style", baseStyle + (isChat ? "background:#1d1d1f; color:#fff;" : ""));
       }
       if (tabDoc) {
-        tabDoc.className = !isChat
-          ? "rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-100 bg-slate-950/40"
-          : "rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400";
+        tabDoc.className = baseCls;
+        tabDoc.setAttribute("style", baseStyle + (!isChat ? "background:#1d1d1f; color:#fff;" : ""));
       }
-
       chatPanel?.classList.toggle("hidden", !isChat);
       documentPanel?.classList.toggle("hidden", isChat);
     }
@@ -643,6 +620,9 @@
 
       docs.forEach((d) => {
         const estado = fmtEstadoDocumento(d.estadoProcesado);
+        const wrap = document.createElement("div");
+        wrap.style.position = "relative";
+
         const btn = document.createElement("button");
         btn.className = "w-full rounded-xl px-3 py-2 text-left";
         btn.style.border = "1px solid var(--apple-separator)";
@@ -675,7 +655,34 @@
         row.appendChild(left);
         row.appendChild(badge);
         btn.appendChild(row);
-        sourcesList.appendChild(btn);
+
+        const del = document.createElement("button");
+        del.className = "resumen-delete-btn";
+        del.title = "Eliminar documento";
+        del.innerHTML = "🗑️";
+        del.style.top = "8px";
+        del.style.right = "8px";
+        del.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!d.id) return;
+          if (!confirm("¿Eliminar este documento? Se borrará para poder re-subirlo y re-procesarlo.")) return;
+          try {
+            await apiFetch(`/api/documentos/${d.id}`, { method: "DELETE" });
+            toast("Documento eliminado", "success");
+            await refreshOverview();
+            currentDocId = null;
+            docTitle.textContent = "—";
+            docStatus.textContent = "—";
+            docError?.classList.add("hidden");
+          } catch (err) {
+            toast(err.message || "No se pudo eliminar el documento", "error");
+          }
+        });
+
+        wrap.appendChild(btn);
+        wrap.appendChild(del);
+        sourcesList.appendChild(wrap);
       });
     }
 
@@ -692,7 +699,8 @@
         const items = Array.isArray(data.resumenes) ? data.resumenes.slice(0, 5) : [];
         if (!items.length) {
           const p = document.createElement("p");
-          p.className = "text-sm text-slate-500";
+          p.style.fontSize = "13px";
+          p.style.color = "var(--apple-text-secondary)";
           p.textContent = "Aún no hay resúmenes.";
           resumenesList.appendChild(p);
         } else {
@@ -707,6 +715,23 @@
             const c = document.createElement("p");
             c.className = "resumen-card-preview";
             c.textContent = truncate(r.contenido || "", 120);
+
+            const delBtn = document.createElement("button");
+            delBtn.className = "resumen-delete-btn";
+            delBtn.title = "Eliminar resumen";
+            delBtn.innerHTML = "🗑️";
+            delBtn.addEventListener("click", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!r.id) return;
+              try {
+                await apiFetch(`/api/resumen/${r.id}`, { method: "DELETE" });
+                toast("Resumen eliminado");
+                await refreshOverview();
+              } catch (err) {
+                toast("No se pudo eliminar el resumen", "error");
+              }
+            });
             
             const viewBtn = document.createElement("button");
             viewBtn.className = "resumen-view-btn";
@@ -717,6 +742,7 @@
               openResumenViewer(r.titulo || "Resumen", r.contenido || "");
             });
             
+            el.appendChild(delBtn);
             el.appendChild(t);
             el.appendChild(c);
             el.appendChild(viewBtn);
@@ -735,18 +761,26 @@
         const items = Array.isArray(data.notas) ? data.notas.slice(0, 4) : [];
         if (!items.length) {
           const p = document.createElement("p");
-          p.className = "text-sm text-slate-500";
+          p.style.fontSize = "13px";
+          p.style.color = "var(--apple-text-secondary)";
           p.textContent = "Aún no hay notas.";
           notesList.appendChild(p);
         } else {
           items.forEach((n) => {
             const el = document.createElement("div");
-            el.className = "rounded-xl border border-slate-800 bg-slate-950/20 p-3";
+            el.style.border = "1px solid var(--apple-separator)";
+            el.style.borderRadius = "12px";
+            el.style.padding = "10px 12px";
+            el.style.background = "#ffffff";
+            el.style.marginBottom = "8px";
             const t = document.createElement("p");
-            t.className = "text-sm font-semibold";
+            t.style.fontSize = "13px";
+            t.style.fontWeight = "600";
             t.textContent = truncate(n.titulo || "Nota", 70);
             const c = document.createElement("p");
-            c.className = "mt-1 text-xs text-slate-400";
+            c.style.marginTop = "4px";
+            c.style.fontSize = "11px";
+            c.style.color = "var(--apple-text-secondary)";
             c.textContent = truncate(n.contenido || "", 110);
             el.appendChild(t);
             el.appendChild(c);
@@ -757,7 +791,8 @@
     }
 
     async function refreshOverview() {
-      const data = await apiFetch(`/api/notebooks/${notebookId}/overview`);
+      const qsTema = hasTemaId ? `?temaId=${encodeURIComponent(String(temaId))}` : "";
+      const data = await apiFetch(`/api/notebooks/${notebookId}/overview${qsTema}`);
       renderOverview(data);
       return data;
     }
@@ -767,38 +802,30 @@
       const isUser = (msg.rol || "").toUpperCase() === "USER";
 
       const wrap = document.createElement("div");
-      wrap.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
+      wrap.className = `apple-msg ${isUser ? "user" : "assistant"}`;
 
       const bubble = document.createElement("div");
-      bubble.className = isUser
-        ? "max-w-[85%] rounded-2xl px-4 py-3 text-sm"
-        : "max-w-[85%] rounded-2xl px-4 py-3 text-sm";
-      bubble.style.color = "var(--apple-text)";
-      bubble.style.background = isUser ? "#eaf3ff" : "#ffffff";
-      bubble.style.border = "1px solid var(--apple-separator)";
-
-      const content = document.createElement("div");
-      content.className = "whitespace-pre-wrap";
-      content.textContent = msg.contenido || "";
-      bubble.appendChild(content);
+      bubble.className = "apple-bubble";
+      bubble.textContent = msg.contenido || "";
 
       const fuentes = sources || msg.fuentes;
       if (!isUser && Array.isArray(fuentes) && fuentes.length) {
         const srcBox = document.createElement("div");
-        srcBox.className = "mt-3 pt-2 text-xs";
+        srcBox.style.marginTop = "10px";
+        srcBox.style.paddingTop = "8px";
         srcBox.style.borderTop = "1px solid var(--apple-separator)";
+        srcBox.style.fontSize = "12px";
         srcBox.style.color = "var(--apple-text-secondary)";
         const title = document.createElement("p");
-        title.className = "font-semibold";
-        title.style.color = "var(--apple-text-secondary)";
+        title.style.fontWeight = "600";
         title.textContent = "Fuentes";
         srcBox.appendChild(title);
 
         fuentes.slice(0, 5).forEach((s) => {
           const line = document.createElement("p");
-          line.className = "mt-1";
+          line.style.marginTop = "4px";
           const name = s.documentoNombre || `Doc ${s.documentoId}`;
-          line.textContent = `[Doc: ${name}, Fragmento ${s.indiceChunk}]`;
+          line.textContent = `[Doc: ${name}]`;
           srcBox.appendChild(line);
         });
         bubble.appendChild(srcBox);
@@ -812,13 +839,9 @@
     function renderTypingIndicator() {
       if (!chatMessages) return null;
       const wrap = document.createElement("div");
-      wrap.className = "flex justify-start";
+      wrap.className = "apple-msg assistant";
       wrap.id = "chat-typing-indicator";
-      wrap.innerHTML = `
-        <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm" style="border:1px solid var(--apple-separator); background:#ffffff; color:var(--apple-text-secondary);">
-          IA escribiendo<span class="typing-dots">...</span>
-        </div>
-      `;
+      wrap.innerHTML = `<div class="apple-bubble" style="color: var(--apple-text-secondary);">IA escribiendo<span class="typing-dots"></span></div>`;
       chatMessages.appendChild(wrap);
       chatMessages.scrollTop = chatMessages.scrollHeight;
       return wrap;
@@ -827,19 +850,24 @@
     function renderInlineChatError(message) {
       if (!chatMessages) return;
       const wrap = document.createElement("div");
-      wrap.className = "flex justify-start";
-      wrap.innerHTML = `
-        <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm" style="border:1px solid #ffc4cb; background:#fff1f3; color:#8b1e2d;">
-          ${message || "No se pudo obtener respuesta de la IA"}
-        </div>
-      `;
+      wrap.className = "apple-msg assistant";
+      const bubble = document.createElement("div");
+      bubble.className = "apple-bubble";
+      bubble.style.background = "#fff1f3";
+      bubble.style.borderColor = "#ffc4cb";
+      bubble.style.color = "#8b1e2d";
+      bubble.textContent = message || "No se pudo obtener respuesta de la IA";
+      wrap.appendChild(bubble);
       chatMessages.appendChild(wrap);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     async function loadConversaciones(selectId = null) {
       const list = await apiFetch("/api/chat/conversaciones");
-      const conv = (Array.isArray(list) ? list : []).filter((c) => Number(c.asignaturaId) === notebookId);
+      const conv = (Array.isArray(list) ? list : []).filter((c) => {
+        if (hasTemaId) return Number(c.temaId) === temaId;
+        return Number(c.asignaturaId) === notebookId;
+      });
       conv.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 
       if (!conversationSelect) return conv;
@@ -868,11 +896,71 @@
       return conv;
     }
 
+    function renderChatSuggestions() {
+      if (!chatMessages) return;
+      const suggestions = [
+        "¿De qué va este documento?",
+        "Resumen de los puntos clave",
+        "Crea 5 preguntas de repaso",
+      ];
+      const wrap = document.createElement("div");
+      wrap.style.display = "flex";
+      wrap.style.flexDirection = "column";
+      wrap.style.alignItems = "center";
+      wrap.style.justifyContent = "center";
+      wrap.style.padding = "32px 16px";
+      wrap.style.color = "var(--apple-text-secondary)";
+      wrap.style.height = "100%";
+
+      const title = document.createElement("p");
+      title.textContent = "Empieza tu conversación";
+      title.style.fontSize = "15px";
+      title.style.fontWeight = "600";
+      title.style.color = "var(--apple-text)";
+      wrap.appendChild(title);
+
+      const sub = document.createElement("p");
+      sub.textContent = "Prueba con una de estas preguntas:";
+      sub.style.fontSize = "13px";
+      sub.style.marginTop = "4px";
+      wrap.appendChild(sub);
+
+      const list = document.createElement("div");
+      list.style.marginTop = "16px";
+      list.style.display = "flex";
+      list.style.flexDirection = "column";
+      list.style.gap = "8px";
+      list.style.maxWidth = "420px";
+      list.style.width = "100%";
+
+      suggestions.forEach((s) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "apple-btn-secondary";
+        btn.style.fontSize = "13px";
+        btn.textContent = s;
+        btn.addEventListener("click", () => {
+          if (chatInput) {
+            chatInput.value = s;
+            chatInput.focus();
+          }
+        });
+        list.appendChild(btn);
+      });
+      wrap.appendChild(list);
+      chatMessages.appendChild(wrap);
+    }
+
     async function loadMensajes() {
       if (!currentConversationId || !chatMessages) return;
       chatMessages.innerHTML = "";
       const msgs = await apiFetch(`/api/chat/conversaciones/${currentConversationId}/mensajes`);
-      (Array.isArray(msgs) ? msgs : []).forEach((m) => renderChatMessage(m));
+      const list = Array.isArray(msgs) ? msgs : [];
+      if (!list.length) {
+        renderChatSuggestions();
+        return;
+      }
+      list.forEach((m) => renderChatMessage(m));
     }
 
     conversationSelect?.addEventListener("change", async () => {
@@ -885,12 +973,12 @@
       const close = openModal(
         "Nueva conversación",
         `
-        <form id="new-conv-form" class="space-y-3">
+        <form id="new-conv-form" style="display:flex; flex-direction:column; gap:10px;">
           <div>
-            <label class="block text-xs font-medium text-slate-400">Título</label>
-            <input id="conv-title" class="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500" placeholder="Ej: Dudas del tema" />
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Título</label>
+            <input id="conv-title" class="apple-input" placeholder="Ej: Dudas del tema" />
           </div>
-          <button type="submit" class="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500">Crear</button>
+          <button type="submit" class="apple-btn-primary">Crear</button>
         </form>
       `
       );
@@ -903,7 +991,7 @@
         try {
           const created = await apiFetch("/api/chat/conversaciones", {
             method: "POST",
-            body: { asignaturaId: notebookId, titulo },
+            body: hasTemaId ? { temaId, titulo } : { asignaturaId: notebookId, titulo },
           });
           close();
           toast("Conversación creada", "success");
@@ -925,13 +1013,16 @@
         if (!currentConversationId) {
           const created = await apiFetch("/api/chat/conversaciones", {
             method: "POST",
-            body: { asignaturaId: notebookId, titulo: "Conversación" },
+            body: hasTemaId ? { temaId, titulo: "Conversación" } : { asignaturaId: notebookId, titulo: "Conversación" },
           });
           currentConversationId = created.id;
           await loadConversaciones(currentConversationId);
         }
 
         chatInput.value = "";
+        if (chatMessages && chatMessages.children.length === 1 && chatMessages.firstChild?.style?.height === "100%") {
+          chatMessages.innerHTML = "";
+        }
         renderChatMessage({ rol: "USER", contenido: content });
 
         const typing = renderTypingIndicator();
@@ -964,14 +1055,13 @@
           estadoEl.className = estadoBadgeClass(doc.estadoProcesado);
           estadoEl.textContent = (doc.estadoProcesado || "PENDIENTE").toUpperCase();
           const txt = document.createElement("span");
-          txt.className = "ml-2 text-xs text-slate-300";
+          txt.style.marginLeft = "8px";
+          txt.style.fontSize = "12px";
+          txt.style.color = "var(--apple-text-secondary)";
           txt.textContent = `Tema: ${doc.temaId ?? "—"}`;
           docStatus.appendChild(estadoEl);
           docStatus.appendChild(txt);
         }
-
-        const estado = fmtEstadoDocumento(doc.estadoProcesado);
-        docStatus?.classList.remove("text-slate-400", "text-rose-200", "text-emerald-200", "text-amber-200", "text-slate-300");
 
         if (docError) {
           if (doc.errorExtraccion) {
@@ -985,32 +1075,12 @@
 
         if (docChunks) {
           docChunks.innerHTML = "";
-          const items = detail.chunks?.items || [];
-          if (!items.length) {
-            const p = document.createElement("p");
-            p.className = "text-xs";
-            p.style.color = "var(--apple-text-secondary)";
-            p.textContent = "Sin chunks todavía.";
-            docChunks.appendChild(p);
-          } else {
-            items.slice(0, 6).forEach((c) => {
-              const div = document.createElement("div");
-              div.className = "rounded-xl p-3";
-              div.style.border = "1px solid var(--apple-separator)";
-              div.style.background = "#ffffff";
-              const meta = document.createElement("p");
-              meta.className = "text-[11px] font-semibold";
-              meta.style.color = "var(--apple-text-secondary)";
-              meta.textContent = `Fragmento ${c.indiceChunk}` + (c.paginaOrigen != null ? ` · Página ${c.paginaOrigen}` : "");
-              const text = document.createElement("p");
-              text.className = "mt-1 text-xs whitespace-pre-wrap";
-              text.style.color = "var(--apple-text)";
-              text.textContent = truncate(c.texto, 260);
-              div.appendChild(meta);
-              div.appendChild(text);
-              docChunks.appendChild(div);
-            });
-          }
+          const preview = detail?.documento?.textoExtraidoPreview || "";
+          const p = document.createElement("p");
+          p.className = "text-xs whitespace-pre-wrap";
+          p.style.color = "var(--apple-text)";
+          p.textContent = preview ? preview : "Aún no hay texto extraído para este documento.";
+          docChunks.appendChild(p);
         }
 
         if (docArtefacts) {
@@ -1138,16 +1208,59 @@
     const notebookTitle = qs("notebook-title");
     const uploadForm = qs("upload-form");
     const uploadFile = qs("upload-file");
+    const uploadFileLabel = qs("upload-file-label");
     const uploadTema = qs("upload-tema");
     const temasList = qs("temas-list");
     const createTemaForm = qs("create-tema-form");
     const createTemaTitle = qs("create-tema-title");
     const docsList = qs("docs-list");
     const docsEmpty = qs("docs-empty");
+    const docsCounter = qs("docs-counter");
     const refreshDocsBtn = qs("refresh-docs");
+    const submitBtn = uploadForm?.querySelector('button[type="submit"]');
 
     let temas = [];
     let docs = [];
+    let pollTimer = null;
+
+    function fmtBytes(bytes) {
+      const n = Number(bytes);
+      if (!Number.isFinite(n) || n <= 0) return "—";
+      const units = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      let v = n;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i += 1;
+      }
+      return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function fmtFecha(iso) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+      } catch {
+        return "";
+      }
+    }
+
+    function iconForExtension(ext) {
+      const e = (ext || "").toLowerCase().replace(".", "");
+      if (e === "pdf") return { label: "PDF", color: "#dc2626" };
+      if (e === "doc" || e === "docx") return { label: "DOC", color: "#2563eb" };
+      if (e === "txt" || e === "md") return { label: "TXT", color: "#6b7280" };
+      if (e === "zip") return { label: "ZIP", color: "#7c3aed" };
+      return { label: e ? e.toUpperCase().slice(0, 4) : "DOC", color: "#0071e3" };
+    }
+
+    function temaTituloPorId(id) {
+      if (id == null) return null;
+      const t = temas.find((x) => Number(x.id) === Number(id));
+      return t?.titulo || `Tema #${id}`;
+    }
 
     function renderTemas() {
       if (!temasList) return;
@@ -1155,7 +1268,8 @@
 
       if (!Array.isArray(temas) || !temas.length) {
         const p = document.createElement("p");
-        p.className = "text-sm text-slate-500";
+        p.style.color = "var(--apple-text-secondary)";
+        p.style.fontSize = "13px";
         p.textContent = "Sin temas todavía.";
         temasList.appendChild(p);
         return;
@@ -1163,16 +1277,18 @@
 
       temas.forEach((t) => {
         const row = document.createElement("div");
-        row.className = "flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2";
+        row.className = "fuentes-tema-row";
+
         const left = document.createElement("div");
         const title = document.createElement("p");
-        title.className = "text-sm font-semibold";
+        title.className = "fuentes-tema-title";
         title.textContent = t.titulo || `Tema #${t.id}`;
         const meta = document.createElement("p");
-        meta.className = "text-[11px] text-slate-500";
-        meta.textContent = `ID: ${t.id}`;
+        meta.className = "fuentes-tema-meta";
+        meta.textContent = `ID ${t.id}`;
         left.appendChild(title);
         left.appendChild(meta);
+
         row.appendChild(left);
         temasList.appendChild(row);
       });
@@ -1191,10 +1307,17 @@
       uploadTema.value = current;
     }
 
+    function updateDocsCounter() {
+      if (!docsCounter) return;
+      const n = Array.isArray(docs) ? docs.length : 0;
+      docsCounter.textContent = n === 1 ? "1 documento" : `${n} documentos`;
+    }
+
     function renderDocs() {
       if (!docsList) return;
       docsList.innerHTML = "";
       docsEmpty?.classList.add("hidden");
+      updateDocsCounter();
 
       if (!Array.isArray(docs) || !docs.length) {
         docsEmpty?.classList.remove("hidden");
@@ -1203,50 +1326,75 @@
 
       docs.forEach((d) => {
         const estado = fmtEstadoDocumento(d.estadoProcesado);
-        const card = document.createElement("div");
-        card.className = "rounded-2xl border border-slate-800 bg-slate-950/20 p-4";
+        const icon = iconForExtension(d.extension || (d.nombreOriginal || "").split(".").pop());
+        const card = document.createElement("article");
+        card.className = "fuente-card";
 
-        const top = document.createElement("div");
-        top.className = "flex items-start justify-between gap-3";
+        // Cabecera con icono, título y estado
+        const head = document.createElement("div");
+        head.className = "fuente-head";
 
-        const left = document.createElement("div");
+        const iconBox = document.createElement("div");
+        iconBox.className = "fuente-icon";
+        iconBox.style.background = `${icon.color}1a`;
+        iconBox.style.color = icon.color;
+        iconBox.textContent = icon.label;
+
+        const headInfo = document.createElement("div");
+        headInfo.className = "fuente-head-info";
+
         const title = document.createElement("p");
-        title.className = "text-sm font-semibold";
+        title.className = "fuente-title";
+        title.title = d.nombreOriginal || "";
         title.textContent = d.nombreOriginal || `Documento ${d.id}`;
-        const meta = document.createElement("p");
-        meta.className = "mt-1 text-xs text-slate-500";
-        meta.textContent = d.temaId ? `Tema #${d.temaId}` : "Sin tema";
-        left.appendChild(title);
-        left.appendChild(meta);
+
+        const subline = document.createElement("p");
+        subline.className = "fuente-subline";
+        const partes = [];
+        partes.push(temaTituloPorId(d.temaId) || "Sin tema");
+        if (d.tamanoBytes) partes.push(fmtBytes(d.tamanoBytes));
+        if (d.paginas) partes.push(`${d.paginas} pág.`);
+        if (d.createdAt) partes.push(fmtFecha(d.createdAt));
+        subline.textContent = partes.join(" · ");
+
+        headInfo.appendChild(title);
+        headInfo.appendChild(subline);
 
         const badge = document.createElement("span");
-        badge.className = `inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-semibold ${estado.cls}`;
+        badge.className = estadoBadgeClass(d.estadoProcesado);
         badge.textContent = estado.label;
 
-        top.appendChild(left);
-        top.appendChild(badge);
-        card.appendChild(top);
+        head.appendChild(iconBox);
+        head.appendChild(headInfo);
+        head.appendChild(badge);
+        card.appendChild(head);
 
         if (d.errorExtraccion) {
           const err = document.createElement("div");
-          err.className = "mt-3 rounded-xl border border-rose-900/50 bg-rose-950/30 p-3 text-xs text-rose-200";
+          err.className = "apple-feedback wrong";
+          err.style.fontSize = "12px";
+          err.style.marginTop = "10px";
           err.textContent = truncate(d.errorExtraccion, 220);
           card.appendChild(err);
         }
 
+        // Acciones
         const actions = document.createElement("div");
-        actions.className = "mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between";
+        actions.className = "fuente-actions";
 
         const link = document.createElement("a");
         link.href = `/app/notebooks/${notebookId}`;
-        link.className = "text-xs font-semibold text-brand-400 hover:text-brand-300";
-        link.textContent = "Abrir en notebook";
+        link.className = "apple-link";
+        link.textContent = "Abrir en notebook →";
 
         const right = document.createElement("div");
-        right.className = "flex items-center gap-2";
+        right.className = "fuente-actions-right";
 
+        const selWrap = document.createElement("div");
+        selWrap.className = "fuente-select-wrap";
         const sel = document.createElement("select");
-        sel.className = "rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500";
+        sel.className = "fuente-select";
+        sel.title = "Asignar tema";
         const optNone = document.createElement("option");
         optNone.value = "";
         optNone.textContent = "Sin tema";
@@ -1261,6 +1409,7 @@
 
         sel.addEventListener("change", async () => {
           const temaId = sel.value ? Number(sel.value) : null;
+          sel.disabled = true;
           try {
             const actual = await apiFetch(`/api/documentos/${d.id}`);
             await apiFetch(`/api/documentos/${d.id}`, {
@@ -1278,16 +1427,29 @@
                 paginas: actual.paginas,
               },
             });
+            d.temaId = temaId;
             toast("Tema actualizado", "success");
-            await refreshDocs();
+            const sub = card.querySelector(".fuente-subline");
+            if (sub) {
+              const ps = [];
+              ps.push(temaTituloPorId(d.temaId) || "Sin tema");
+              if (d.tamanoBytes) ps.push(fmtBytes(d.tamanoBytes));
+              if (d.paginas) ps.push(`${d.paginas} pág.`);
+              if (d.createdAt) ps.push(fmtFecha(d.createdAt));
+              sub.textContent = ps.join(" · ");
+            }
           } catch (err) {
             toast(err.message || "No se pudo asignar el tema", "error");
             sel.value = d.temaId ? String(d.temaId) : "";
+          } finally {
+            sel.disabled = false;
           }
         });
+        selWrap.appendChild(sel);
 
         const del = document.createElement("button");
-        del.className = "rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-xs font-medium text-slate-200 hover:border-rose-500";
+        del.type = "button";
+        del.className = "apple-danger-btn";
         del.textContent = "Eliminar";
         del.addEventListener("click", async () => {
           if (!confirm("¿Eliminar este documento?")) return;
@@ -1300,7 +1462,7 @@
           }
         });
 
-        right.appendChild(sel);
+        right.appendChild(selWrap);
         right.appendChild(del);
         actions.appendChild(link);
         actions.appendChild(right);
@@ -1310,9 +1472,32 @@
       });
     }
 
+    function hayProcesando() {
+      return docs.some((d) => {
+        const e = (d.estadoProcesado || "").toUpperCase();
+        return e === "PROCESANDO" || e === "PENDIENTE";
+      });
+    }
+
+    function schedulePolling() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      if (!hayProcesando()) return;
+      pollTimer = setTimeout(async () => {
+        try {
+          await refreshDocs(true);
+        } catch {
+          // se reintentará
+        }
+      }, 4000);
+    }
+
     async function refreshTemas() {
       try {
         temas = await apiFetch(`/api/temas?asignaturaId=${notebookId}`);
+        temas = Array.isArray(temas) ? temas : [];
       } catch {
         temas = [];
       }
@@ -1320,22 +1505,46 @@
       fillTemaSelect();
     }
 
-    async function refreshDocs() {
+    async function refreshDocs(silencioso = false) {
       try {
-        const overview = await apiFetch(`/api/notebooks/${notebookId}/overview`);
-        notebookTitle.textContent = overview?.notebook?.nombre || `Notebook ${notebookId}`;
-        docs = Array.isArray(overview.documentos) ? overview.documentos : [];
+        const lista = await apiFetch(`/api/documentos?asignaturaId=${notebookId}`);
+        docs = Array.isArray(lista) ? lista : [];
+        docs.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
       } catch (err) {
-        toast(err.message || "No se pudieron cargar documentos", "error");
+        if (!silencioso) toast(err.message || "No se pudieron cargar documentos", "error");
         docs = [];
       }
       renderDocs();
+      schedulePolling();
+    }
+
+    async function refreshTitulo() {
+      try {
+        const asig = await apiFetch(`/api/asignaturas/${notebookId}`);
+        if (notebookTitle) notebookTitle.textContent = asig?.nombre || `Notebook ${notebookId}`;
+      } catch {
+        if (notebookTitle) notebookTitle.textContent = `Notebook ${notebookId}`;
+      }
+    }
+
+    const uploadFileLabelText = uploadFileLabel?.querySelector(".fuentes-file-drop-text");
+    if (uploadFile && uploadFileLabel) {
+      uploadFile.addEventListener("change", () => {
+        const f = uploadFile.files?.[0];
+        if (uploadFileLabelText) {
+          uploadFileLabelText.textContent = f ? f.name : "Selecciona un archivo (PDF, DOCX, TXT, MD, ZIP)";
+        }
+        uploadFileLabel.classList.toggle("has-file", !!f);
+      });
     }
 
     uploadForm?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const file = uploadFile?.files?.[0];
-      if (!file) return;
+      if (!file) {
+        toast("Selecciona un archivo primero", "warning");
+        return;
+      }
       const temaId = uploadTema?.value ? uploadTema.value : "";
 
       const fd = new FormData();
@@ -1343,15 +1552,32 @@
       fd.append("asignaturaId", String(notebookId));
       if (temaId) fd.append("temaId", temaId);
 
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.originalText = submitBtn.dataset.originalText || submitBtn.textContent;
+        submitBtn.textContent = "Subiendo…";
+      }
+
       try {
         const res = await apiFetch("/api/documentos/upload", { method: "POST", body: fd });
         const warnings = res?.warnings || [];
         toast(warnings.length ? "Subido con avisos" : "Documento subido", warnings.length ? "info" : "success");
         if (warnings.length) warnings.forEach((w) => toast(w, "info"));
         uploadFile.value = "";
+        if (uploadFileLabel) {
+          if (uploadFileLabelText) {
+            uploadFileLabelText.textContent = "Selecciona un archivo (PDF, DOCX, TXT, MD, ZIP)";
+          }
+          uploadFileLabel.classList.remove("has-file");
+        }
         await refreshDocs();
       } catch (err) {
         toast(err.message || "No se pudo subir el documento", "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = submitBtn.dataset.originalText || "Subir y procesar";
+        }
       }
     });
 
@@ -1364,15 +1590,25 @@
         createTemaTitle.value = "";
         toast("Tema creado", "success");
         await refreshTemas();
+        renderDocs();
       } catch (err) {
         toast(err.message || "No se pudo crear el tema", "error");
       }
     });
 
-    refreshDocsBtn?.addEventListener("click", refreshDocs);
+    refreshDocsBtn?.addEventListener("click", () => refreshDocs());
 
-    await refreshDocs();
-    await refreshTemas();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden" && pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      } else if (document.visibilityState === "visible" && hayProcesando()) {
+        schedulePolling();
+      }
+    });
+
+    await Promise.all([refreshTitulo(), refreshTemas(), refreshDocs()]);
+    renderDocs();
   }
 
   async function initChatPage() {
@@ -1393,7 +1629,8 @@
       listEl.innerHTML = "";
       if (!conversations.length) {
         const p = document.createElement("p");
-        p.className = "text-sm text-slate-500";
+        p.style.color = "var(--apple-text-secondary)";
+        p.style.fontSize = "13px";
         p.textContent = "No hay conversaciones.";
         listEl.appendChild(p);
         return;
@@ -1401,19 +1638,21 @@
 
       conversations.forEach((c) => {
         const btn = document.createElement("button");
-        btn.className =
-          "w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-left hover:border-brand-500";
-        if (c.id === activeId) btn.classList.add("border-brand-500");
+        btn.className = "apple-list-btn";
+        if (c.id === activeId) btn.classList.add("is-active");
         btn.addEventListener("click", async () => {
           activeId = c.id;
           renderConversations();
           await loadMensajes();
         });
         const t = document.createElement("p");
-        t.className = "text-sm font-semibold";
+        t.style.fontSize = "13px";
+        t.style.fontWeight = "600";
         t.textContent = c.titulo || `Conversación #${c.id}`;
         const meta = document.createElement("p");
-        meta.className = "mt-0.5 text-xs text-slate-500";
+        meta.style.fontSize = "11px";
+        meta.style.color = "var(--apple-text-secondary)";
+        meta.style.marginTop = "2px";
         meta.textContent = c.asignaturaId ? `Notebook #${c.asignaturaId}` : "Sin notebook";
         btn.appendChild(t);
         btn.appendChild(meta);
@@ -1425,12 +1664,9 @@
       if (!chatMessages) return;
       const isUser = (msg.rol || "").toUpperCase() === "USER";
       const wrap = document.createElement("div");
-      wrap.className = `flex ${isUser ? "justify-end" : "justify-start"}`;
-
+      wrap.className = `apple-msg ${isUser ? "user" : "assistant"}`;
       const bubble = document.createElement("div");
-      bubble.className = isUser
-        ? "max-w-[85%] rounded-2xl bg-brand-600/20 px-4 py-3 text-sm text-slate-100"
-        : "max-w-[85%] rounded-2xl border border-slate-800 bg-slate-950/20 px-4 py-3 text-sm text-slate-100";
+      bubble.className = "apple-bubble";
       bubble.textContent = msg.contenido || "";
       wrap.appendChild(bubble);
       chatMessages.appendChild(wrap);
@@ -1457,16 +1693,16 @@
       const close = openModal(
         "Nueva conversación",
         `
-        <form id="chat-new-form" class="space-y-3">
+        <form id="chat-new-form" style="display:flex; flex-direction:column; gap:10px;">
           <div>
-            <label class="block text-xs font-medium text-slate-400">Notebook ID (asignaturaId)</label>
-            <input id="chat-asignatura-id" type="number" class="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500" placeholder="Opcional" />
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Notebook ID (asignaturaId)</label>
+            <input id="chat-asignatura-id" type="number" class="apple-input" placeholder="Opcional" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400">Título</label>
-            <input id="chat-title" class="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500" placeholder="Ej: Dudas" />
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Título</label>
+            <input id="chat-title" class="apple-input" placeholder="Ej: Dudas" />
           </div>
-          <button type="submit" class="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500">Crear</button>
+          <button type="submit" class="apple-btn-primary">Crear</button>
         </form>
       `
       );
@@ -1652,8 +1888,7 @@
       const opciones = Array.isArray(p.opciones) ? p.opciones : [];
       opciones.forEach((o, i) => {
         const btn = document.createElement("button");
-        btn.className =
-          "w-full rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-left text-sm text-slate-200 hover:border-brand-500 disabled:opacity-60";
+        btn.className = "apple-option-btn";
         btn.textContent = o.texto || `Opción ${i + 1}`;
         btn.addEventListener("click", async () => {
           if (answered) return;
@@ -1668,24 +1903,18 @@
 
             Array.from(optionsBox.children).forEach((child, idx2) => {
               child.disabled = true;
-              if (idx2 === indiceCorrecto) {
-                child.classList.add("border-emerald-600");
-              }
-              if (idx2 === i && !correcta) {
-                child.classList.add("border-rose-600");
-              }
+              if (idx2 === indiceCorrecto) child.classList.add("correct");
+              if (idx2 === i && !correcta) child.classList.add("wrong");
             });
 
             feedback.classList.remove("hidden");
-            feedback.className =
-              "mt-4 rounded-xl border px-3 py-3 text-sm " +
-              (correcta
-                ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-100"
-                : "border-rose-900/60 bg-rose-950/30 text-rose-100");
+            feedback.className = "apple-feedback " + (correcta ? "correct" : "wrong");
             feedback.textContent = correcta ? "Correcto." : "Incorrecto.";
             if (res.explicacion) {
               const extra = document.createElement("p");
-              extra.className = "mt-2 text-xs text-slate-200/90";
+              extra.style.marginTop = "6px";
+              extra.style.fontSize = "13px";
+              extra.style.opacity = "0.9";
               extra.textContent = res.explicacion;
               feedback.appendChild(extra);
             }
@@ -1766,23 +1995,32 @@
 
         items.forEach((n) => {
           const card = document.createElement("div");
-          card.className = "rounded-2xl border border-slate-800 bg-slate-950/20 p-4";
-          if (n.colorHex) card.style.borderColor = n.colorHex;
+          card.className = "apple-panel";
+          card.style.padding = "14px";
+          if (n.colorHex) card.style.borderLeft = `4px solid ${n.colorHex}`;
 
           const title = document.createElement("p");
-          title.className = "text-sm font-semibold";
+          title.style.fontSize = "13px";
+          title.style.fontWeight = "600";
           title.textContent = n.titulo || "Nota";
 
           const content = document.createElement("p");
-          content.className = "mt-2 text-xs text-slate-300 whitespace-pre-wrap";
+          content.style.marginTop = "6px";
+          content.style.fontSize = "12px";
+          content.style.color = "var(--apple-text-secondary)";
+          content.style.whiteSpace = "pre-wrap";
           content.textContent = truncate(n.contenido || "", 260);
 
           const meta = document.createElement("p");
-          meta.className = "mt-3 text-[11px] text-slate-500";
-          meta.textContent = `Doc: ${n.documentoId ?? "—"} · Chunk: ${n.chunkId ?? "—"} · Tema: ${n.temaId ?? "—"}`;
+          meta.style.marginTop = "10px";
+          meta.style.fontSize = "11px";
+          meta.style.color = "var(--apple-text-secondary)";
+          meta.textContent = `Doc: ${n.documentoId ?? "—"} · Tema: ${n.temaId ?? "—"}`;
 
           const del = document.createElement("button");
-          del.className = "mt-4 w-full rounded-xl border border-slate-800 bg-slate-950/10 px-3 py-2 text-xs font-medium text-slate-200 hover:border-rose-500";
+          del.className = "apple-danger-btn";
+          del.style.marginTop = "12px";
+          del.style.width = "100%";
           del.textContent = "Eliminar";
           del.addEventListener("click", async () => {
             if (!confirm("¿Eliminar esta nota?")) return;
@@ -1813,7 +2051,6 @@
       const contenido = qs("note-content")?.value?.trim();
       const colorHex = qs("note-color")?.value?.trim() || null;
       const docIdVal = Number(qs("note-documento-id")?.value) || null;
-      const chunkIdVal = Number(qs("note-chunk-id")?.value) || null;
       const temaIdVal = Number(qs("note-tema-id")?.value) || null;
 
       if (!titulo || !contenido) return;
@@ -1823,7 +2060,6 @@
           method: "POST",
           body: {
             documentoId: docIdVal,
-            chunkId: chunkIdVal,
             temaId: temaIdVal,
             titulo,
             contenido,
@@ -1912,7 +2148,7 @@
         <form id="form-crear-asignatura" class="space-y-3">
           <input id="asig-nombre" class="apple-input" placeholder="Ej: Matemáticas" required />
           <textarea id="asig-descripcion" class="apple-input" rows="3" placeholder="Descripción (opcional)"></textarea>
-          <label class="block text-sm text-slate-600">Color identificativo</label>
+          <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Color identificativo</label>
           <input id="asig-color" type="color" value="#0071e3" class="h-10 w-full" />
           <select id="asig-trimestre" class="apple-input">
             <option value="">Sin asignar</option>
@@ -2276,13 +2512,25 @@
     });
   }
 
+  function setupFabAnimations() {
+    document.addEventListener("click", (event) => {
+      const fab = event.target.closest(".apple-fab, .fab-mini-btn");
+      if (!fab) return;
+      fab.classList.remove("is-pressed");
+      void fab.offsetWidth;
+      fab.classList.add("is-pressed");
+      setTimeout(() => fab.classList.remove("is-pressed"), 360);
+    });
+  }
+
   async function init() {
+    setupFabAnimations();
+
     const page = document.body.dataset.page;
     if (!page) return;
 
     if (page !== "login") requireAuth();
     checkTokenExpiry();
-    setInterval(checkTokenExpiry, 60_000);
 
     if (page === "login") return initLogin();
     if (page === "home-index") return initHomePage();

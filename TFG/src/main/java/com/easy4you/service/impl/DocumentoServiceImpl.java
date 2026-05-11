@@ -17,7 +17,6 @@ import com.easy4you.mapper.PreguntaTestMapper;
 import com.easy4you.mapper.ResumenMapper;
 import com.easy4you.model.entity.Documento;
 import com.easy4you.model.entity.DocumentoChunk;
-import com.easy4you.model.entity.PreguntaTest;
 import com.easy4you.model.entity.Tema;
 import com.easy4you.repository.AsignaturaRepository;
 import com.easy4you.repository.DocumentoChunkRepository;
@@ -28,6 +27,7 @@ import com.easy4you.repository.PreguntaTestRepository;
 import com.easy4you.repository.ResumenRepository;
 import com.easy4you.repository.TemaRepository;
 import com.easy4you.service.DocumentoService;
+import com.easy4you.util.TextUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -77,6 +77,20 @@ public class DocumentoServiceImpl implements DocumentoService {
   @Transactional(readOnly = true)
   public List<Documento> listarPorTemaId(Long temaId) {
     return documentoRepository.findByTemaId(temaId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Documento> listarPorAsignaturaIdDeUsuario(Long usuarioId, Long asignaturaId) {
+    if (usuarioId == null || asignaturaId == null) {
+      return List.of();
+    }
+    if (asignaturaRepository.findByIdAndUsuarioId(asignaturaId, usuarioId).isEmpty()) {
+      throw new NotFoundException("Asignatura no encontrada: " + asignaturaId);
+    }
+    return documentoRepository.findByAsignaturaId(asignaturaId).stream()
+        .filter(d -> d.getUsuario() != null && usuarioId.equals(d.getUsuario().getId()))
+        .toList();
   }
 
   @Override
@@ -196,7 +210,7 @@ public class DocumentoServiceImpl implements DocumentoService {
           documentoIds, query, PageRequest.of(0, SEARCH_MAX_CHUNKS));
     } catch (Exception e) {
       // Fallback a búsqueda LIKE si FULLTEXT no está disponible
-      page = documentoChunkRepository.findByDocumentoIdInAndTextoContainingIgnoreCase(
+      page = documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
           documentoIds, query, PageRequest.of(0, SEARCH_MAX_CHUNKS));
     }
 
@@ -288,16 +302,11 @@ public class DocumentoServiceImpl implements DocumentoService {
     if (temaId != null) {
       Tema tema =
           temaRepository
-              .findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId)
+              .findByIdAndAsignaturaUsuarioId(temaId, usuarioId)
               .orElseThrow(() -> new NotFoundException("Tema no encontrado: " + temaId));
 
       if (asignaturaId != null) {
-        Long temaAsignaturaId =
-            tema.getUnidad() != null
-                    && tema.getUnidad().getResultadoAprendizaje() != null
-                    && tema.getUnidad().getResultadoAprendizaje().getAsignatura() != null
-                ? tema.getUnidad().getResultadoAprendizaje().getAsignatura().getId()
-                : null;
+        Long temaAsignaturaId = tema.getAsignatura() != null ? tema.getAsignatura().getId() : null;
         if (temaAsignaturaId == null || !asignaturaId.equals(temaAsignaturaId)) {
           throw new BadRequestException("El tema no pertenece a la asignatura indicada");
         }
@@ -363,13 +372,6 @@ public class DocumentoServiceImpl implements DocumentoService {
   }
 
   private String trimToMax(String s, int max) {
-    if (s == null) {
-      return "";
-    }
-    String t = s.trim();
-    if (t.length() <= max) {
-      return t;
-    }
-    return t.substring(0, Math.max(0, max - 1)).trim() + "…";
+    return TextUtils.truncate(s, max);
   }
 }

@@ -26,7 +26,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "usuario")
@@ -44,7 +44,7 @@ public class Usuario extends BaseAuditableEntity {
   @Column(name = "apellidos", length = 150)
   private String apellidos;
 
-  @Column(name = "email", nullable = false, length = 190)
+  @Column(name = "email", nullable = false, length = 190, unique = true)
   @ToString.Include
   private String email;
 

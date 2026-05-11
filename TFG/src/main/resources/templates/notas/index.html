@@ -15,7 +15,17 @@
   <body data-page="notes" class="apple-shell">
     <header class="apple-header">
       <div class="apple-header-inner">
-        <a href="/app/home" class="apple-logo">Easy4You</a>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/home';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
         <nav class="apple-nav">
           <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
           <button id="logout-btn" class="apple-logout-btn">Salir</button>
@@ -25,7 +35,7 @@
     <main class="apple-container" style="padding-top: 20px;">
       <section>
         <h1 class="apple-hero-title" style="font-size: 34px; margin-top: 12px;">Notas</h1>
-        <p class="apple-hero-subtitle">Organiza tus ideas por documento, fragmento o tema.</p>
+        <p class="apple-hero-subtitle">Organiza tus ideas por documento o tema.</p>
       </section>
       <div style="margin-top: 20px; display: grid; grid-template-columns: 380px 1fr; gap: 14px;">
         <section class="apple-card" style="padding: 16px;">
@@ -73,15 +83,6 @@
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-              <div>
-                <label for="note-chunk-id" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Chunk ID</label>
-                <input
-                  id="note-chunk-id"
-                  type="number"
-                  class="apple-input"
-                  placeholder="Opcional"
-                />
-              </div>
               <div>
                 <label for="note-tema-id" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Tema ID</label>
                 <input

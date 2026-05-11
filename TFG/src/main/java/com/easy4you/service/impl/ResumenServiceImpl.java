@@ -54,6 +54,18 @@ public class ResumenServiceImpl implements ResumenService {
   }
 
   @Override
+  public void eliminarDeUsuario(Long usuarioId, Long resumenId) {
+    if (usuarioId == null) {
+      throw new NotFoundException("Resumen no encontrado: " + resumenId);
+    }
+    Resumen resumen =
+        resumenRepository
+            .findByIdAndUsuarioId(resumenId, usuarioId)
+            .orElseThrow(() -> new NotFoundException("Resumen no encontrado: " + resumenId));
+    resumenRepository.deleteById(resumen.getId());
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public List<Resumen> listarPorDocumento(Long usuarioId, Long documentoId) {
     Documento documento =
@@ -69,7 +81,7 @@ public class ResumenServiceImpl implements ResumenService {
   @Override
   @Transactional(readOnly = true)
   public List<Resumen> listarPorTema(Long usuarioId, Long temaId) {
-    if (temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
+    if (temaRepository.findByIdAndAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
       throw new NotFoundException("Tema no encontrado: " + temaId);
     }
 

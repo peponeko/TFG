@@ -54,7 +54,7 @@ public class AuthController {
 
       Usuario usuario =
           usuarioRepository
-              .findByEmail(request.getEmail())
+              .findTopByEmailOrderByIdAsc(request.getEmail())
               .orElseThrow(() -> new UnauthorizedException("Credenciales inválidas"));
 
       return ResponseEntity.ok(new AuthResponseDTO(token, "Bearer", usuario.getId(), usuario.getEmail(), roles));

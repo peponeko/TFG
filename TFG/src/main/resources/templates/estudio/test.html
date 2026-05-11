@@ -2,97 +2,54 @@
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Test · Easy4You</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                400: "#7C5CFF",
-                500: "#6D4CFF",
-                600: "#5B3FFF",
-              },
-            },
-          },
-        },
-      };
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" th:href="@{/css/app.css}" />
     <script th:src="@{/js/app.js}" defer></script>
   </head>
-
-  <body data-page="study-test" class="min-h-screen bg-slate-950 text-slate-100">
-    <header class="border-b border-slate-800 bg-slate-950/60 backdrop-blur">
-      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <a href="/app/notebooks" class="flex items-center gap-2 font-semibold tracking-tight">
-          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600/20 text-brand-400"
-            >E</span
-          >
-          <span>Easy4You</span>
-        </a>
-        <nav class="flex items-center gap-2">
-          <a href="/app/notebooks" class="rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-900/60"
-            >Notebooks</a
-          >
-          <button
-            id="logout-btn"
-            class="rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2 text-sm font-medium text-slate-200 hover:border-brand-500"
-          >
-            Salir
+  <body data-page="study-test" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button type="button" class="apple-back-btn" onclick="if (history.length > 1) history.back(); else window.location.href='/app/notebooks';" aria-label="Atrás">
+            <span class="apple-back-icon">←</span><span>Atrás</span>
           </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
         </nav>
       </div>
     </header>
 
-    <main class="mx-auto max-w-3xl px-4 py-10">
-      <h1 class="text-2xl font-semibold tracking-tight">Sesión de test</h1>
-      <p class="mt-1 text-sm text-slate-400">
-        Usa <span class="font-mono">?documentoId=</span> o <span class="font-mono">?temaId=</span> en la URL.
-      </p>
+    <main class="apple-container" style="padding-top: 18px; max-width: 720px;">
+      <h1 class="apple-page-title">Sesión de test</h1>
+      <p class="apple-page-subtitle">Responde a las preguntas y comprueba tu nivel.</p>
 
-      <div class="mt-8 rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
-        <div class="flex items-center justify-between">
-          <p id="test-counter" class="text-xs font-semibold uppercase tracking-wide text-slate-400">—</p>
-          <button
-            id="restart-test-btn"
-            class="rounded-xl border border-slate-800 bg-slate-950/20 px-3 py-2 text-xs font-medium text-slate-200 hover:border-brand-500"
-          >
-            Reiniciar
-          </button>
+      <section class="apple-panel" style="margin-top: 22px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <p id="test-counter" class="apple-pill">—</p>
+          <button id="restart-test-btn" class="apple-btn-secondary" style="padding:8px 12px; font-size:12px;">Reiniciar</button>
         </div>
 
-        <div class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/20 p-6">
-          <p id="question-text" class="text-lg font-semibold">—</p>
-          <div id="options-box" class="mt-4 space-y-2"></div>
-
-          <div id="answer-feedback" class="mt-4 hidden rounded-xl border border-slate-800 bg-slate-950/30 p-3 text-sm"></div>
+        <div style="margin-top: 18px; border:1px solid var(--apple-separator); border-radius: 14px; padding: 22px; background: #fbfbfd;">
+          <p id="question-text" style="font-size: 17px; font-weight: 600; margin: 0;">—</p>
+          <div id="options-box" style="margin-top: 16px;"></div>
+          <div id="answer-feedback" class="hidden"></div>
         </div>
 
-        <div class="mt-5 flex flex-col gap-2 sm:flex-row">
-          <button
-            id="next-question-btn"
-            class="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500"
-          >
-            Siguiente
-          </button>
+        <div style="margin-top: 14px; display: flex;">
+          <button id="next-question-btn" class="apple-btn-primary" style="flex:1;">Siguiente</button>
         </div>
 
-        <p id="test-empty" class="mt-6 hidden text-sm text-slate-500">
+        <p id="test-empty" class="hidden" style="margin-top: 18px; color: var(--apple-text-secondary); font-size: 14px;">
           No hay preguntas para este documento/tema. Genera tests desde la vista del documento.
         </p>
-      </div>
+      </section>
     </main>
 
     <div id="toast-root"></div>

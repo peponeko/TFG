@@ -27,21 +27,13 @@ import com.easy4you.service.ChatSource;
 import com.easy4you.service.TemaService;
 import com.easy4you.service.ai.AiService;
 import com.easy4you.util.PromptTemplates;
+import com.easy4you.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.text.Normalizer;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,100 +50,11 @@ public class ChatServiceImpl implements ChatService {
   private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
 
   private static final int MAX_INPUT_CHARS_CHAT = 10_000;
+  private static final int CONTEXT_MAX_CHUNKS = 14;
+  private static final int CONTEXT_MAX_CHUNK_CHARS = 800;
+  private static final int OVERVIEW_CHUNKS_PER_DOC = 4;
 
-  private static final int KEYWORD_MAX = 6;
-  private static final int CHUNKS_PER_KEYWORD = 50;
   private static final int HISTORY_MAX_MESSAGES = 10;
-
-  private static final Set<String> STOPWORDS =
-      Set.of(
-          "a",
-          "al",
-          "algo",
-          "algunos",
-          "ante",
-          "antes",
-          "como",
-          "con",
-          "contra",
-          "cual",
-          "cuando",
-          "de",
-          "del",
-          "desde",
-          "donde",
-          "durante",
-          "e",
-          "el",
-          "ella",
-          "ellas",
-          "ellos",
-          "en",
-          "entre",
-          "era",
-          "es",
-          "esa",
-          "ese",
-          "eso",
-          "esta",
-          "este",
-          "esto",
-          "estos",
-          "fue",
-          "ha",
-          "haber",
-          "hace",
-          "hacia",
-          "han",
-          "hasta",
-          "hay",
-          "la",
-          "las",
-          "le",
-          "les",
-          "lo",
-          "los",
-          "mas",
-          "más",
-          "me",
-          "mi",
-          "mis",
-          "mismo",
-          "mucho",
-          "muy",
-          "no",
-          "o",
-          "otra",
-          "otro",
-          "para",
-          "pero",
-          "por",
-          "porque",
-          "que",
-          "quien",
-          "se",
-          "ser",
-          "si",
-          "sin",
-          "sobre",
-          "su",
-          "sus",
-          "tambien",
-          "también",
-          "te",
-          "tener",
-          "tiene",
-          "toda",
-          "todo",
-          "todos",
-          "tu",
-          "tus",
-          "un",
-          "una",
-          "uno",
-          "unos",
-          "y",
-          "ya");
 
   private final ChatConversacionRepository conversacionRepository;
   private final ChatMensajeRepository mensajeRepository;
@@ -256,57 +159,61 @@ public class ChatServiceImpl implements ChatService {
     userMessage.setFuentesUsadasJson(null);
     userMessage = mensajeRepository.save(userMessage);
 
-    int maxChunks = Math.max(1, aiProperties.getMaxContextChunks());
     List<Documento> documentosActivos = resolveActiveDocuments(conversacion);
 
     documentosActivos =
         documentosActivos.stream()
-            .filter(this::isDocumentoListo)
             .filter(d -> d.getRutaArchivo() != null && !d.getRutaArchivo().isBlank())
+            .filter(this::isDocumentoUsableForChat)
             .toList();
 
-    List<Long> documentoIds = documentosActivos.stream().map(Documento::getId).toList();
-    List<DocumentoChunk> chunks = retrieveRelevantChunks(contenido, documentoIds, maxChunks);
-
-    String assistantContent = generarContenidoAsistente(conversacionId, contenido, chunks);
-
-    List<Long> chunkIds = chunks.stream().map(DocumentoChunk::getId).filter(Objects::nonNull).toList();
-    String sourcesJson = toJsonSilently(chunkIds);
+    String documentosContexto =
+        isGeneralOverviewQuestion(contenido)
+            ? buildOverviewContextFromFirstChunks(documentosActivos)
+            : buildRelevantContextFromChunks(documentosActivos, contenido);
+    String assistantContent = generarContenidoAsistente(conversacionId, contenido, documentosContexto);
 
     ChatMensaje assistantMessage = new ChatMensaje();
     assistantMessage.setConversacion(conversacion);
     assistantMessage.setRol(ChatRol.ASSISTANT);
     assistantMessage.setContenido(assistantContent);
-    assistantMessage.setFuentesUsadasJson(sourcesJson);
+    assistantMessage.setFuentesUsadasJson(null);
     assistantMessage = mensajeRepository.save(assistantMessage);
 
     conversacion.setUpdatedAt(LocalDateTime.now());
     conversacionRepository.save(conversacion);
 
-    List<ChatSource> sources =
-        chunks.stream()
-            .map(this::toSource)
-            .filter(Objects::nonNull)
-            .toList();
+    List<ChatSource> sources = List.of();
 
     log.info(
-        "Mensaje procesado: conversacionId={}, usuarioId={}, chunks={}",
+        "Mensaje procesado: conversacionId={}, usuarioId={}, documentosActivos={}",
         conversacionId,
         usuarioId,
-        chunks.size());
+        documentosActivos.size());
 
     return new ChatSendMessageResult(userMessage, assistantMessage, sources);
   }
 
-  private String generarContenidoAsistente(
-      Long conversacionId, String contenido, List<DocumentoChunk> chunks) {
-    if (chunks.isEmpty()) {
-      return "No encuentro información sobre esto en los documentos proporcionados";
+  private String generarContenidoAsistente(Long conversacionId, String contenido, String documentosContexto) {
+    // Modo "chat normal": si no hay contexto suficiente, responde igualmente (estilo ChatGPT),
+    // avisando que no se han usado documentos.
+    if (documentosContexto == null || documentosContexto.isBlank()) {
+      String prompt =
+          """
+          El usuario está usando un asistente tipo ChatGPT.
+          No hay texto de documentos disponible para esta respuesta.
+          Responde en español de forma útil y clara.
+          Si el usuario pregunta sobre un PDF/documento, sugiere subir/seleccionar un documento o hacer una pregunta más concreta.
+          
+          Mensaje del usuario:
+          """
+              + (contenido == null ? "" : contenido.trim());
+      String out = aiService.generarRespuesta(prompt, aiProperties.getMaxTokensChat());
+      return (out == null || out.isBlank()) ? "Hola. ¿En qué puedo ayudarte?" : out;
     }
 
-    String chunksText = buildChunksContext(chunks);
     String historyText = buildRecentHistory(conversacionId);
-    String contexto = chunksText;
+    String contexto = documentosContexto;
     if (!historyText.isBlank()) {
       contexto += "\n\nHISTORIAL RECIENTE (no es fuente, solo contexto conversacional):\n" + historyText;
     }
@@ -409,13 +316,10 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private Asignatura resolveAsignaturaFromTema(Tema tema) {
-    if (tema == null
-        || tema.getUnidad() == null
-        || tema.getUnidad().getResultadoAprendizaje() == null
-        || tema.getUnidad().getResultadoAprendizaje().getAsignatura() == null) {
+    if (tema == null || tema.getAsignatura() == null || tema.getAsignatura().getId() == null) {
       throw new BadRequestException("Tema inválido");
     }
-    return tema.getUnidad().getResultadoAprendizaje().getAsignatura();
+    return tema.getAsignatura();
   }
 
   private String defaultTitle(Asignatura asignatura, Tema tema) {
@@ -428,12 +332,18 @@ public class ChatServiceImpl implements ChatService {
     return "Chat";
   }
 
-  private boolean isDocumentoListo(Documento documento) {
+  private boolean isDocumentoUsableForChat(Documento documento) {
     if (documento == null) {
       return false;
     }
+    String texto = documento.getTextoExtraido();
+    if (texto == null || texto.isBlank()) {
+      return false;
+    }
     EstadoProcesadoDocumento estado = documento.getEstadoProcesado();
-    return estado == EstadoProcesadoDocumento.PROCESADO || estado == EstadoProcesadoDocumento.LISTO;
+    return estado == EstadoProcesadoDocumento.PROCESADO
+        || estado == EstadoProcesadoDocumento.LISTO
+        || estado == EstadoProcesadoDocumento.PROCESANDO;
   }
 
   private List<Documento> resolveActiveDocuments(ChatConversacion conversacion) {
@@ -476,77 +386,141 @@ public class ChatServiceImpl implements ChatService {
     }
   }
 
-  private List<DocumentoChunk> retrieveRelevantChunks(String question, List<Long> documentoIds, int maxChunks) {
-    if (documentoIds == null || documentoIds.isEmpty()) {
-      return List.of();
+  private String buildRelevantContextFromChunks(List<Documento> documentosActivos, String pregunta) {
+    if (documentosActivos == null || documentosActivos.isEmpty()) {
+      return "";
+    }
+    String q = pregunta == null ? "" : pregunta.trim();
+    if (q.isBlank()) {
+      return "";
     }
 
-    List<String> keywords = extractKeywords(question);
-    if (keywords.isEmpty()) {
-      Page<DocumentoChunk> page =
-          documentoChunkRepository.findByDocumentoIdInOrderByDocumentoIdAscIndiceChunkAsc(
-              documentoIds, PageRequest.of(0, maxChunks));
-      return page.getContent();
+    List<Long> docIds =
+        documentosActivos.stream()
+            .filter(Objects::nonNull)
+            .map(Documento::getId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+
+    if (docIds.isEmpty()) {
+      return "";
     }
 
-    Map<Long, ScoredChunk> candidates = new HashMap<>();
+    Page<DocumentoChunk> page;
+    try {
+      page = documentoChunkRepository.searchFullText(docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+    } catch (Exception ex) {
+      page =
+          documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
+              docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+    }
 
-    for (String kw : keywords) {
-      Page<DocumentoChunk> page =
-          documentoChunkRepository.findByDocumentoIdInAndTextoContainingIgnoreCase(
-              documentoIds, kw, PageRequest.of(0, CHUNKS_PER_KEYWORD));
-
-      for (DocumentoChunk chunk : page.getContent()) {
-        if (chunk.getId() == null) {
-          continue;
-        }
-        String text = chunk.getTexto() == null ? "" : chunk.getTexto();
-        int occurrences = countOccurrences(normalizeForScoring(text), kw);
-
-        ScoredChunk scored = candidates.computeIfAbsent(chunk.getId(), id -> new ScoredChunk(chunk));
-        scored.matchedKeywords.add(kw);
-        scored.occurrences += Math.max(1, occurrences);
+    if (page.getContent() == null || page.getContent().isEmpty()) {
+      // Fallback: si no hay match, al menos mandamos un pequeño prefijo del texto extraído
+      // para no devolver siempre el mensaje de "no encuentro".
+      StringBuilder sb = new StringBuilder();
+      for (Documento d : documentosActivos) {
+        if (d == null) continue;
+        String nombre =
+            d.getNombreOriginal() == null || d.getNombreOriginal().isBlank() ? "Documento" : d.getNombreOriginal().trim();
+        String texto = d.getTextoExtraido() == null ? "" : d.getTextoExtraido().trim();
+        if (texto.isBlank()) continue;
+        sb.append("[Doc: ").append(nombre).append("]\n");
+        sb.append(truncate(texto, 1800)).append("\n\n");
       }
+      return sb.toString().trim();
     }
 
-    if (candidates.isEmpty()) {
-      Page<DocumentoChunk> page =
-          documentoChunkRepository.findByDocumentoIdInOrderByDocumentoIdAscIndiceChunkAsc(
-              documentoIds, PageRequest.of(0, maxChunks));
-      return page.getContent();
-    }
-
-    return candidates.values().stream()
-        .sorted(Comparator.<ScoredChunk>comparingInt(ScoredChunk::score).reversed())
-        .limit(maxChunks)
-        .map(sc -> sc.chunk)
-        .toList();
-  }
-
-  private String buildChunksContext(List<DocumentoChunk> chunks) {
     StringBuilder sb = new StringBuilder();
-    for (DocumentoChunk c : chunks) {
-      if (c == null) {
+    for (DocumentoChunk c : page.getContent()) {
+      if (c == null || c.getDocumento() == null) {
         continue;
       }
-
-      Documento doc = c.getDocumento();
-      String docName = doc != null && doc.getNombreOriginal() != null ? doc.getNombreOriginal() : "Documento";
-      int fragmento = c.getIndiceChunk() != null ? c.getIndiceChunk() + 1 : 0;
-
-      sb.append("[Doc: ").append(docName).append(", Fragmento ").append(fragmento).append("]");
-      if (c.getPaginaOrigen() != null) {
-        sb.append(" (Página ").append(c.getPaginaOrigen()).append(")");
+      String nombre =
+          c.getDocumento().getNombreOriginal() == null || c.getDocumento().getNombreOriginal().isBlank()
+              ? "Documento"
+              : c.getDocumento().getNombreOriginal().trim();
+      String texto = c.getTexto() == null ? "" : c.getTexto().trim();
+      if (texto.isBlank()) {
+        continue;
       }
-      sb.append('\n');
-
-      String text = c.getTexto() == null ? "" : c.getTexto().trim();
-      if (text.length() > 3500) {
-        text = text.substring(0, 3400).trim() + "…";
-      }
-      sb.append(text).append("\n\n");
+      sb.append("[Doc: ").append(nombre).append("]\n");
+      sb.append(truncate(texto, CONTEXT_MAX_CHUNK_CHARS)).append("\n\n");
     }
     return sb.toString().trim();
+  }
+
+  private String buildOverviewContextFromFirstChunks(List<Documento> documentosActivos) {
+    if (documentosActivos == null || documentosActivos.isEmpty()) {
+      return "";
+    }
+    List<Long> docIds =
+        documentosActivos.stream()
+            .filter(Objects::nonNull)
+            .map(Documento::getId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    if (docIds.isEmpty()) {
+      return "";
+    }
+
+    Page<DocumentoChunk> page =
+        documentoChunkRepository.findByDocumentoIdInOrderByDocumentoIdAscIndiceChunkAsc(
+            docIds, PageRequest.of(0, Math.min(CONTEXT_MAX_CHUNKS, Math.max(6, docIds.size() * OVERVIEW_CHUNKS_PER_DOC))));
+
+    if (page.getContent() == null || page.getContent().isEmpty()) {
+      // Fallback final: prefijo del texto extraído
+      StringBuilder sb = new StringBuilder();
+      for (Documento d : documentosActivos) {
+        if (d == null) continue;
+        String nombre =
+            d.getNombreOriginal() == null || d.getNombreOriginal().isBlank() ? "Documento" : d.getNombreOriginal().trim();
+        String texto = d.getTextoExtraido() == null ? "" : d.getTextoExtraido().trim();
+        if (texto.isBlank()) continue;
+        sb.append("[Doc: ").append(nombre).append("]\n");
+        sb.append(truncate(texto, 2000)).append("\n\n");
+      }
+      return sb.toString().trim();
+    }
+
+    StringBuilder sb = new StringBuilder();
+    for (DocumentoChunk c : page.getContent()) {
+      if (c == null || c.getDocumento() == null) continue;
+      String nombre =
+          c.getDocumento().getNombreOriginal() == null || c.getDocumento().getNombreOriginal().isBlank()
+              ? "Documento"
+              : c.getDocumento().getNombreOriginal().trim();
+      String texto = c.getTexto() == null ? "" : c.getTexto().trim();
+      if (texto.isBlank()) continue;
+      sb.append("[Doc: ").append(nombre).append("]\n");
+      sb.append(truncate(texto, CONTEXT_MAX_CHUNK_CHARS)).append("\n\n");
+    }
+    return sb.toString().trim();
+  }
+
+  private boolean isGeneralOverviewQuestion(String contenido) {
+    if (contenido == null) return false;
+    String t = contenido.trim().toLowerCase();
+    if (t.isBlank()) return false;
+    // Saludos / mensajes muy cortos: tratarlos como "general"
+    if (t.length() < 8) return true;
+    if (t.equals("hola") || t.equals("buenas") || t.equals("hey") || t.equals("holaa")) return true;
+
+    return t.contains("de qué va")
+        || t.contains("de que va")
+        || t.contains("resumen")
+        || t.contains("cosas más importantes")
+        || t.contains("cosas mas importantes")
+        || t.contains("lo más importante")
+        || t.contains("lo mas importante")
+        || t.contains("puntos clave")
+        || t.contains("ideas principales")
+        || t.contains("explica el pdf")
+        || t.contains("explicame el pdf")
+        || t.contains("explica el documento")
+        || t.contains("explicame el documento");
   }
 
   private String buildRecentHistory(Long conversacionId) {
@@ -582,62 +556,6 @@ public class ChatServiceImpl implements ChatService {
     return sb.toString().trim();
   }
 
-  private List<String> extractKeywords(String question) {
-    if (question == null || question.isBlank()) {
-      return List.of();
-    }
-
-    String normalized = normalizeForScoring(question);
-    String[] raw = normalized.split("\\s+");
-
-    LinkedHashSet<String> keywords = new LinkedHashSet<>();
-    for (String token : raw) {
-      String t = token.trim();
-      if (t.isBlank()) {
-        continue;
-      }
-      if (t.length() < 4) {
-        continue;
-      }
-      if (STOPWORDS.contains(t)) {
-        continue;
-      }
-      keywords.add(t);
-      if (keywords.size() >= KEYWORD_MAX) {
-        break;
-      }
-    }
-    return List.copyOf(keywords);
-  }
-
-  private String normalizeForScoring(String text) {
-    if (text == null) {
-      return "";
-    }
-    String n = Normalizer.normalize(text, Normalizer.Form.NFD);
-    n = n.replaceAll("\\p{M}", "");
-    n = n.toLowerCase(Locale.ROOT);
-    n = n.replaceAll("[^\\p{L}\\p{N}\\s]", " ");
-    return n.replaceAll("\\s+", " ").trim();
-  }
-
-  private int countOccurrences(String haystack, String needle) {
-    if (haystack == null || needle == null || haystack.isBlank() || needle.isBlank()) {
-      return 0;
-    }
-    int count = 0;
-    int idx = 0;
-    while (true) {
-      int found = haystack.indexOf(needle, idx);
-      if (found < 0) {
-        break;
-      }
-      count++;
-      idx = found + needle.length();
-    }
-    return count;
-  }
-
   private List<Long> parseLongList(String json) {
     if (json == null || json.isBlank()) {
       return List.of();
@@ -665,37 +583,6 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private String truncate(String text, int maxChars) {
-    if (text == null) {
-      return "";
-    }
-    String t = text.trim();
-    if (t.length() <= maxChars) {
-      return t;
-    }
-    return t.substring(0, Math.max(0, maxChars - 1)).trim() + "…";
-  }
-
-  private ChatSource toSource(DocumentoChunk chunk) {
-    if (chunk == null || chunk.getId() == null) {
-      return null;
-    }
-    Documento doc = chunk.getDocumento();
-    Long docId = doc != null ? doc.getId() : null;
-    String docName = doc != null ? doc.getNombreOriginal() : null;
-    return new ChatSource(chunk.getId(), docId, docName, chunk.getIndiceChunk(), chunk.getPaginaOrigen());
-  }
-
-  private static class ScoredChunk {
-    private final DocumentoChunk chunk;
-    private final Set<String> matchedKeywords = new HashSet<>();
-    private int occurrences = 0;
-
-    private ScoredChunk(DocumentoChunk chunk) {
-      this.chunk = chunk;
-    }
-
-    private int score() {
-      return matchedKeywords.size() * 10 + occurrences;
-    }
+    return TextUtils.truncate(text, maxChars);
   }
 }

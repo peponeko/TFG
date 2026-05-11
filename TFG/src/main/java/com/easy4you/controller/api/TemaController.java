@@ -5,7 +5,6 @@ import com.easy4you.dto.tema.TemaRequestDTO;
 import com.easy4you.dto.tema.TemaResponseDTO;
 import com.easy4you.exception.BadRequestException;
 import com.easy4you.model.entity.Tema;
-import com.easy4you.model.entity.Usuario;
 import com.easy4you.security.AuthenticatedUserService;
 import com.easy4you.service.TemaService;
 import jakarta.validation.Valid;
@@ -90,11 +89,12 @@ public class TemaController {
   private TemaResponseDTO toResponse(Tema tema) {
     return new TemaResponseDTO(
         tema.getId(),
-        tema.getUnidad() != null ? tema.getUnidad().getId() : null,
+        tema.getAsignatura() != null ? tema.getAsignatura().getId() : null,
         tema.getTitulo(),
         tema.getDescripcion(),
         tema.getOrden(),
         tema.getPalabrasClave(),
+        tema.getTrimestre(),
         tema.getCreatedAt(),
         tema.getUpdatedAt());
   }

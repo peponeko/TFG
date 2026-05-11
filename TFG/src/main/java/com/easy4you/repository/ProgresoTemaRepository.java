@@ -17,11 +17,8 @@ public interface ProgresoTemaRepository extends JpaRepository<ProgresoTema, Long
       select pt
       from ProgresoTema pt
       join pt.tema t
-      join t.unidad u
-      join u.resultadoAprendizaje ra
-      join ra.asignatura a
       where pt.usuario.id = :usuarioId
-        and a.id = :asignaturaId
+        and t.asignatura.id = :asignaturaId
       """)
   List<ProgresoTema> findByUsuarioIdAndAsignaturaId(
       @Param("usuarioId") Long usuarioId, @Param("asignaturaId") Long asignaturaId);

@@ -28,7 +28,7 @@ public class AuthenticatedUserService {
     }
 
     return usuarioRepository
-        .findByEmail(email)
+        .findTopByEmailOrderByIdAsc(email)
         .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado: " + email));
   }
 }

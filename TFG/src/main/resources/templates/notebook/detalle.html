@@ -16,6 +16,14 @@
     <header class="apple-header">
       <div class="apple-header-inner">
         <div style="display: flex; align-items: center; gap: 12px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/notebooks';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
           <a href="/app/home" class="apple-nav-link">Inicio</a>
           <span style="color: var(--apple-text-secondary);">›</span>
           <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
@@ -108,8 +116,8 @@
             </form>
 
             <p style="margin-top: 8px; font-size: 12px; color: var(--apple-text-secondary);">
-              El asistente responde solo con fragmentos de tus fuentes. Si Ollama no está disponible, verás un error
-              claro.
+              El asistente responde usando el texto extraído de tus documentos. Si la IA no está disponible, verás una
+              respuesta de fallback para que la demo no se pare.
             </p>
           </div>
 
@@ -137,7 +145,7 @@
                 <div id="doc-artefacts" style="margin-top: 10px;"></div>
               </div>
               <div class="apple-card" style="padding: 12px;">
-                <h4 style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase;">Chunks</h4>
+                <h4 style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase;">Texto extraído</h4>
                 <div id="doc-chunks" style="margin-top: 10px;"></div>
               </div>
             </div>

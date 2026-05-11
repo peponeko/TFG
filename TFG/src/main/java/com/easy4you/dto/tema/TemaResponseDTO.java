@@ -12,11 +12,12 @@ import lombok.Setter;
 @AllArgsConstructor
 public class TemaResponseDTO {
   private Long id;
-  private Long unidadId;
+  private Long asignaturaId;
   private String titulo;
   private String descripcion;
   private Integer orden;
   private String palabrasClave;
+  private Integer trimestre;
   private LocalDateTime createdAt;
   private LocalDateTime updatedAt;
 }

@@ -3,15 +3,12 @@ package com.easy4you.controller.api;
 import com.easy4you.dto.nota.NotaCreateRequestDTO;
 import com.easy4you.dto.nota.NotaResponseDTO;
 import com.easy4you.dto.nota.NotaUpdateRequestDTO;
-import com.easy4you.exception.BadRequestException;
 import com.easy4you.exception.NotFoundException;
 import com.easy4you.model.entity.Documento;
-import com.easy4you.model.entity.DocumentoChunk;
 import com.easy4you.model.entity.Nota;
 import com.easy4you.model.entity.Tema;
 import com.easy4you.model.entity.Usuario;
 import com.easy4you.repository.AsignaturaRepository;
-import com.easy4you.repository.DocumentoChunkRepository;
 import com.easy4you.repository.DocumentoRepository;
 import com.easy4you.repository.TemaRepository;
 import com.easy4you.security.AuthenticatedUserService;
@@ -39,7 +36,6 @@ public class NotaController {
   private final AuthenticatedUserService authenticatedUserService;
   private final NotaService notaService;
   private final DocumentoRepository documentoRepository;
-  private final DocumentoChunkRepository documentoChunkRepository;
   private final TemaRepository temaRepository;
   private final AsignaturaRepository asignaturaRepository;
 
@@ -47,13 +43,7 @@ public class NotaController {
   public ResponseEntity<NotaResponseDTO> crear(@Valid @RequestBody NotaCreateRequestDTO request) {
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
 
-    DocumentoChunk chunk = null;
-    if (request.getChunkId() != null) {
-      chunk =
-          documentoChunkRepository
-              .findByIdAndDocumentoUsuarioId(request.getChunkId(), usuarioActual.getId())
-              .orElseThrow(() -> new NotFoundException("Chunk no encontrado: " + request.getChunkId()));
-    }
+    // En el esquema simplificado no usamos chunks. Se ignora chunkId si llega por compatibilidad.
 
     Documento documento = null;
     if (request.getDocumentoId() != null) {
@@ -63,24 +53,11 @@ public class NotaController {
               .orElseThrow(() -> new NotFoundException("Documento no encontrado: " + request.getDocumentoId()));
     }
 
-    if (chunk != null) {
-      Documento fromChunk = chunk.getDocumento();
-      if (fromChunk == null || fromChunk.getId() == null) {
-        throw new BadRequestException("Chunk inválido: " + request.getChunkId());
-      }
-
-      if (documento == null) {
-        documento = fromChunk;
-      } else if (!documento.getId().equals(fromChunk.getId())) {
-        throw new BadRequestException("El chunk no pertenece al documento indicado");
-      }
-    }
-
     Tema tema = null;
     if (request.getTemaId() != null) {
       tema =
           temaRepository
-              .findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(request.getTemaId(), usuarioActual.getId())
+              .findByIdAndAsignaturaUsuarioId(request.getTemaId(), usuarioActual.getId())
               .orElseThrow(() -> new NotFoundException("Tema no encontrado: " + request.getTemaId()));
     } else if (documento != null) {
       tema = documento.getTema();
@@ -89,7 +66,7 @@ public class NotaController {
     Nota nota = new Nota();
     nota.setUsuario(usuarioActual);
     nota.setDocumento(documento);
-    nota.setChunk(chunk);
+    nota.setChunk(null);
     nota.setTema(tema);
     nota.setTitulo(request.getTitulo().trim());
     nota.setContenido(request.getContenido().trim());
@@ -112,7 +89,7 @@ public class NotaController {
       throw new NotFoundException("Documento no encontrado: " + documentoId);
     }
     if (temaId != null
-        && temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioActual.getId()).isEmpty()) {
+        && temaRepository.findByIdAndAsignaturaUsuarioId(temaId, usuarioActual.getId()).isEmpty()) {
       throw new NotFoundException("Tema no encontrado: " + temaId);
     }
     if (asignaturaId != null && asignaturaRepository.findByIdAndUsuarioId(asignaturaId, usuarioActual.getId()).isEmpty()) {

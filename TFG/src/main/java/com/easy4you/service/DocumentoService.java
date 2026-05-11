@@ -15,6 +15,8 @@ public interface DocumentoService {
 
   List<Documento> listarPorTemaId(Long temaId);
 
+  List<Documento> listarPorAsignaturaIdDeUsuario(Long usuarioId, Long asignaturaId);
+
   Documento crear(Documento documento);
 
   Documento obtenerPorId(Long id);

@@ -16,6 +16,8 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
 
   List<Documento> findByTemaId(Long temaId);
 
+  List<Documento> findByAsignaturaIdAndTemaId(Long asignaturaId, Long temaId);
+
   Optional<Documento> findTopByUsuarioIdAndChecksumSha256(Long usuarioId, String checksumSha256);
 
   @Query(

@@ -18,16 +18,13 @@ public interface NotaRepository extends JpaRepository<Nota, Long> {
       from Nota n
       left join n.documento d
       left join n.tema t
-      left join t.unidad u
-      left join u.resultadoAprendizaje ra
-      left join ra.asignatura asigTema
       where n.usuario.id = :usuarioId
         and (:documentoId is null or d.id = :documentoId)
         and (:temaId is null or t.id = :temaId)
         and (
           :asignaturaId is null
           or (d is not null and d.asignatura.id = :asignaturaId)
-          or (asigTema is not null and asigTema.id = :asignaturaId)
+          or (t is not null and t.asignatura.id = :asignaturaId)
         )
       order by n.updatedAt desc
       """)

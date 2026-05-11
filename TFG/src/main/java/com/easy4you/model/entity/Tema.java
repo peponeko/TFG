@@ -26,7 +26,7 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "tema")
@@ -39,8 +39,11 @@ public class Tema extends BaseAuditableEntity {
   private Long id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "unidad_id", nullable = false)
-  private Unidad unidad;
+  @JoinColumn(name = "asignatura_id", nullable = false)
+  private Asignatura asignatura;
+
+  @Column(name = "trimestre")
+  private Integer trimestre;
 
   @Column(name = "titulo", nullable = false, length = 200)
   @ToString.Include

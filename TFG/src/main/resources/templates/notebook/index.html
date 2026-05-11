@@ -15,7 +15,17 @@
   <body data-page="notebook-index" class="apple-shell">
     <header class="apple-header">
       <div class="apple-header-inner">
-        <a href="/app/home" class="apple-logo">Easy4You</a>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/home';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
         <nav class="apple-nav">
           <a href="/app/notas" class="apple-nav-link">Notas</a>
           <button id="logout-btn" class="apple-logout-btn">Salir</button>

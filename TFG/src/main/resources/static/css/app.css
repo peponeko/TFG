@@ -1,11 +1,15 @@
 @import url("apple-theme.css");
 
 :root {
-  color-scheme: dark;
+  /* La UI principal usa el tema "Apple" en claro.
+     Evita que el navegador fuerce colores oscuros por color-scheme. */
+  color-scheme: light;
 }
 
 body {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--apple-bg);
+  color: var(--apple-text);
 }
 
 #toast-root {

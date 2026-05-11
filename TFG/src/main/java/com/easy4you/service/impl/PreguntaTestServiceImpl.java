@@ -88,7 +88,7 @@ public class PreguntaTestServiceImpl implements PreguntaTestService {
   @Override
   @Transactional(readOnly = true)
   public List<PreguntaTestResponseDTO> listarPorTema(Long usuarioId, Long temaId) {
-    if (temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
+    if (temaRepository.findByIdAndAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
       throw new NotFoundException("Tema no encontrado: " + temaId);
     }
 

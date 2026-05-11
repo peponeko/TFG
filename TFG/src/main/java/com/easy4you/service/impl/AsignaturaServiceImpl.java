@@ -107,17 +107,15 @@ public class AsignaturaServiceImpl implements AsignaturaService {
     long trimestre3 = 0L;
     long sinAsignar = 0L;
 
-    List<Object[]> rows = temaRepository.countTemasByAsignaturaIdGroupByResultadoCodigo(asignaturaId);
+    List<Object[]> rows = temaRepository.countTemasByAsignaturaIdGroupByTrimestre(asignaturaId);
     for (Object[] row : rows) {
       if (row == null || row.length < 2) {
         continue;
       }
-
-      String codigo = row[0] == null ? null : String.valueOf(row[0]);
+      Integer tri = row[0] instanceof Number ? ((Number) row[0]).intValue() : null;
       long count = row[1] instanceof Number ? ((Number) row[1]).longValue() : 0L;
 
-      Integer tri = parseTrimestreFromCodigo(codigo);
-      if (tri == null) {
+      if (tri == null || tri == 0) {
         sinAsignar += count;
       } else if (tri == 1) {
         trimestre1 += count;
@@ -131,14 +129,10 @@ public class AsignaturaServiceImpl implements AsignaturaService {
     }
 
     return Map.of(
-        "trimestre1",
-        trimestre1,
-        "trimestre2",
-        trimestre2,
-        "trimestre3",
-        trimestre3,
-        "sinAsignar",
-        sinAsignar);
+        "trimestre1", trimestre1,
+        "trimestre2", trimestre2,
+        "trimestre3", trimestre3,
+        "sinAsignar", sinAsignar);
   }
 
   @Override
@@ -179,9 +173,7 @@ public class AsignaturaServiceImpl implements AsignaturaService {
       String titulo = row[1] == null ? null : String.valueOf(row[1]);
       String descripcion = row[2] == null ? null : String.valueOf(row[2]);
       String palabrasClave = row[3] == null ? null : String.valueOf(row[3]);
-      String codigo = row[4] == null ? null : String.valueOf(row[4]);
-
-      Integer trimestre = parseTrimestreFromCodigo(codigo);
+      Integer trimestre = row[4] instanceof Number ? ((Number) row[4]).intValue() : null;
       response.add(
           new TemaPlanoResponseDTO(
               temaId,
@@ -195,20 +187,6 @@ public class AsignaturaServiceImpl implements AsignaturaService {
     }
 
     return response;
-  }
-
-  private Integer parseTrimestreFromCodigo(String codigo) {
-    if (codigo == null) {
-      return null;
-    }
-    String c = codigo.trim().toUpperCase();
-    if (c.length() == 2 && c.charAt(0) == 'T') {
-      char n = c.charAt(1);
-      if (n == '1') return 1;
-      if (n == '2') return 2;
-      if (n == '3') return 3;
-    }
-    return null;
   }
 
   private Map<Long, Long> toCountMap(List<Object[]> rows) {

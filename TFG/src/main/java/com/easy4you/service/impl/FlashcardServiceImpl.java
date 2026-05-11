@@ -76,7 +76,7 @@ public class FlashcardServiceImpl implements FlashcardService {
   @Override
   @Transactional(readOnly = true)
   public List<FlashcardResponseDTO> listarPorTema(Long usuarioId, Long temaId) {
-    if (temaRepository.findByIdAndUnidadResultadoAprendizajeAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
+    if (temaRepository.findByIdAndAsignaturaUsuarioId(temaId, usuarioId).isEmpty()) {
       throw new NotFoundException("Tema no encontrado: " + temaId);
     }
 

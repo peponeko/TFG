@@ -1,6 +1,5 @@
 package com.easy4you.service.impl;
 
-import com.easy4you.dto.asignatura.AsignaturaResponseDTO;
 import com.easy4you.dto.documento.DocumentoResponseDTO;
 import com.easy4you.dto.flashcard.FlashcardResponseDTO;
 import com.easy4you.dto.nota.NotaResponseDTO;
@@ -16,7 +15,6 @@ import com.easy4you.mapper.ResumenMapper;
 import com.easy4you.model.entity.Asignatura;
 import com.easy4you.model.entity.Documento;
 import com.easy4you.model.entity.Nota;
-import com.easy4you.model.entity.PreguntaTest;
 import com.easy4you.model.enums.RolNotebookCompartido;
 import com.easy4you.repository.AsignaturaRepository;
 import com.easy4you.repository.DocumentoRepository;
@@ -25,6 +23,7 @@ import com.easy4you.repository.NotaRepository;
 import com.easy4you.repository.PreguntaTestOpcionRepository;
 import com.easy4you.repository.PreguntaTestRepository;
 import com.easy4you.repository.ResumenRepository;
+import com.easy4you.repository.TemaRepository;
 import com.easy4you.service.NotebookCompartidoService;
 import com.easy4you.service.NotebookService;
 import java.util.List;
@@ -45,19 +44,19 @@ public class NotebookServiceImpl implements NotebookService {
   private final PreguntaTestRepository preguntaTestRepository;
   private final PreguntaTestOpcionRepository preguntaTestOpcionRepository;
   private final NotaRepository notaRepository;
+  private final TemaRepository temaRepository;
   private final NotebookCompartidoService notebookCompartidoService;
 
   @Override
   @Transactional(readOnly = true)
-  public NotebookOverviewResponseDTO obtenerOverview(Long usuarioId, Long notebookId) {
+  public NotebookOverviewResponseDTO obtenerOverview(Long usuarioId, Long notebookId, Long temaId) {
     // Verificar acceso (propietario o invitado)
     if (!notebookCompartidoService.tieneAcceso(usuarioId, notebookId)) {
       throw new NotFoundException("Notebook no encontrado o sin acceso: " + notebookId);
     }
 
-    // Obtener rol del usuario
-    RolNotebookCompartido rol =
-        notebookCompartidoService.obtenerRol(usuarioId, notebookId).orElse(RolNotebookCompartido.VIEWER);
+    // Obtener rol del usuario (por ahora no afecta a la respuesta)
+    notebookCompartidoService.obtenerRol(usuarioId, notebookId).orElse(RolNotebookCompartido.VIEWER);
 
     // Obtener asignatura (puede ser propietario o compartida)
     Asignatura asignatura =
@@ -65,8 +64,15 @@ public class NotebookServiceImpl implements NotebookService {
             .findById(notebookId)
             .orElseThrow(() -> new NotFoundException("Notebook no encontrado: " + notebookId));
 
-    // Todos los documentos de la asignatura (el usuario tiene acceso)
-    List<Documento> documentos = documentoRepository.findByAsignaturaId(asignatura.getId());
+    if (temaId != null && temaRepository.findByIdAndAsignaturaId(temaId, asignatura.getId()).isEmpty()) {
+      throw new NotFoundException("Tema no encontrado en este notebook: " + temaId);
+    }
+
+    // Documentos de la asignatura (o del tema si se filtra)
+    List<Documento> documentos =
+        temaId == null
+            ? documentoRepository.findByAsignaturaId(asignatura.getId())
+            : documentoRepository.findByAsignaturaIdAndTemaId(asignatura.getId(), temaId);
 
     List<Long> documentoIds = documentos.stream().map(Documento::getId).filter(Objects::nonNull).toList();
 
@@ -102,7 +108,7 @@ public class NotebookServiceImpl implements NotebookService {
 
     // Notas del usuario en esta asignatura
     List<NotaResponseDTO> notas =
-        notaRepository.search(usuarioId, null, null, asignatura.getId()).stream()
+        notaRepository.search(usuarioId, null, temaId, asignatura.getId()).stream()
             .map(this::toNotaResponse)
             .toList();
 

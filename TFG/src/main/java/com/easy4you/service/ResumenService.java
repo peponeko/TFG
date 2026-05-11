@@ -12,6 +12,8 @@ public interface ResumenService {
 
   void eliminar(Long id);
 
+  void eliminarDeUsuario(Long usuarioId, Long resumenId);
+
   List<Resumen> listarPorDocumento(Long usuarioId, Long documentoId);
 
   List<Resumen> listarPorTema(Long usuarioId, Long temaId);

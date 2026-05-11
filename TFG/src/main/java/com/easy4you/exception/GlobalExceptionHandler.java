@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(basePackages = "com.easy4you.controller.api")
 // Captura todas las excepciones de la aplicación y devuelve respuestas JSON con el error
 public class GlobalExceptionHandler {
+  private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(NotFoundException.class)
   public ResponseEntity<ApiErrorResponse> handleNotFound(NotFoundException ex, HttpServletRequest request) {
@@ -57,6 +60,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+    log.error("Error inesperado en {} {}", request.getMethod(), request.getRequestURI(), ex);
     return build(HttpStatus.INTERNAL_SERVER_ERROR, "Error inesperado", request.getRequestURI(), null);
   }
 

@@ -16,7 +16,10 @@ public interface DocumentoChunkRepository extends JpaRepository<DocumentoChunk, 
 
   Page<DocumentoChunk> findByDocumentoIdOrderByIndiceChunkAsc(Long documentoId, Pageable pageable);
 
-  Page<DocumentoChunk> findByDocumentoIdInAndTextoContainingIgnoreCase(
+  // Nota: evitamos IgnoreCase porque sobre columnas LONGTEXT (CLOB) Hibernate usa upper()/lower()
+  // y en MySQL puede fallar (Parameter 1 of function 'upper()'... mapped to CLOB).
+  // La collation suele ser case-insensitive, así que basta con Containing.
+  Page<DocumentoChunk> findByDocumentoIdInAndTextoContaining(
       List<Long> documentoIds, String texto, Pageable pageable);
 
   Page<DocumentoChunk> findByDocumentoIdInOrderByDocumentoIdAscIndiceChunkAsc(

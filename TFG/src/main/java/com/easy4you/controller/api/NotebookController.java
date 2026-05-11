@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.DeleteMapping;
 
@@ -95,9 +96,10 @@ public class NotebookController {
   }
 
   @GetMapping("/{id}/overview")
-  public ResponseEntity<NotebookOverviewResponseDTO> overview(@PathVariable Long id) {
+  public ResponseEntity<NotebookOverviewResponseDTO> overview(
+      @PathVariable Long id, @RequestParam(value = "temaId", required = false) Long temaId) {
     Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
-    return ResponseEntity.ok(notebookService.obtenerOverview(usuarioId, id));
+    return ResponseEntity.ok(notebookService.obtenerOverview(usuarioId, id, temaId));
   }
 
   private NotebookCompartidoResponseDTO toCompartidoResponse(NotebookCompartido nc) {
