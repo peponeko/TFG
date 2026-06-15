@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Notas · Easy4You" />
+    <title>Notas · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="notes" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/home';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+    <main class="apple-container" style="padding-top: 20px;">
+      <section>
+        <h1 class="apple-hero-title" style="font-size: 34px; margin-top: 12px;">Notas</h1>
+        <p class="apple-hero-subtitle">Organiza tus ideas por documento o tema.</p>
+      </section>
+      <div style="margin-top: 20px; display: grid; grid-template-columns: 380px 1fr; gap: 14px;">
+        <section class="apple-card" style="padding: 16px;">
+          <h2 style="font-size: 14px; font-weight: 600;">Nueva nota</h2>
+          <form id="create-note-form" style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <label for="note-title" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Título</label>
+              <input
+                id="note-title"
+                type="text"
+                required
+                class="apple-input"
+                placeholder="Idea clave…"
+              />
+            </div>
+            <div>
+              <label for="note-content" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Contenido</label>
+              <textarea
+                id="note-content"
+                required
+                rows="6"
+                class="apple-input"
+                placeholder="Escribe tu nota…"
+              ></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <label for="note-color" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Color</label>
+                <input
+                  id="note-color"
+                  type="color"
+                  value="#6D4CFF"
+                  class="apple-input"
+                  style="height: 40px; padding: 6px;"
+                />
+              </div>
+              <div>
+                <label for="note-documento-id" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Documento ID</label>
+                <input
+                  id="note-documento-id"
+                  type="number"
+                  class="apple-input"
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <label for="note-tema-id" style="display: block; font-size: 12px; color: var(--apple-text-secondary);">Tema ID</label>
+                <input
+                  id="note-tema-id"
+                  type="number"
+                  class="apple-input"
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
+            <button type="submit" class="apple-btn-primary" style="width: 100%;">Guardar nota</button>
+          </form>
+        </section>
+        <section class="apple-card" style="padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-size: 14px; font-weight: 600;">Tus notas</h2>
+            <button id="refresh-notes" class="apple-btn-secondary" style="padding: 8px 10px; font-size: 12px;">Actualizar</button>
+          </div>
+          <div id="notes-grid" class="apple-grid" style="margin-top: 12px;"></div>
+          <p id="notes-empty" class="hidden" style="margin-top: 12px; color: var(--apple-text-secondary);">
+            No tienes notas todavía. Crea la primera desde el panel izquierdo.
+          </p>
+        </section>
+      </div>
+    </main>
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>

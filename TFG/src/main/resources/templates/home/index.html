@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Home · Easy4You" />
+    <title>Home · Easy4You</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+
+  <body data-page="home-index" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <a href="/app/home" class="apple-logo">Easy4You</a>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="apple-container">
+      <section class="apple-hero">
+        <h1 class="apple-hero-title">Tus asignaturas</h1>
+        <p class="apple-hero-subtitle">Organiza tu estudio por trimestres</p>
+      </section>
+
+      <section>
+        <div id="asignaturas-grid" class="apple-grid"></div>
+        <div id="show-more-wrap" class="apple-show-more" style="display: none;">
+          <button id="show-more-btn" class="apple-btn-secondary">+ Mostrar más</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>
+

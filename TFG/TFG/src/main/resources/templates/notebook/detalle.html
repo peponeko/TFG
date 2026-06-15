@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Notebook · Easy4You" />
+    <title>Notebook · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="notebook-detail" th:attr="data-notebook-id=${notebookId}" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/notebooks';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-nav-link">Inicio</a>
+          <span style="color: var(--apple-text-secondary);">›</span>
+          <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
+          <span style="color: var(--apple-text-secondary);">›</span>
+          <span id="notebook-title" style="font-weight: 500;">Cargando…</span>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+    <main class="notebook-full-container" style="padding-top: 18px;">
+      <div class="notebook-layout">
+        <aside class="apple-card" style="padding: 16px;">
+          <div class="flex items-center justify-between gap-3">
+            <h2 style="font-size: 14px; font-weight: 600;">Fuentes</h2>
+            <a
+              th:href="@{/app/notebooks/{id}/fuentes(id=${notebookId})}"
+              class="apple-btn-secondary"
+              style="padding: 8px 10px; font-size: 12px;"
+              >Gestionar</a
+            >
+          </div>
+
+          <div style="margin-top: 10px;">
+            <input
+              id="sources-search"
+              type="search"
+              placeholder="Buscar en fuentes…"
+              class="apple-input"
+            />
+          </div>
+
+          <div id="sources-list" style="margin-top: 12px; margin-bottom: 16px;"></div>
+
+          <a
+            th:href="@{/app/notebooks/{id}/fuentes(id=${notebookId})}"
+            class="apple-btn-primary"
+            style="margin-top: 12px; width: 100%;"
+          >
+            Añadir fuente
+          </a>
+        </aside>
+
+        <section class="apple-card" style="padding: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: inline-flex; background: var(--apple-bg-secondary); border-radius: 12px; padding: 4px;">
+              <button
+                id="tab-chat"
+                class="apple-btn-secondary"
+                style="padding: 8px 12px; font-size: 12px;"
+                data-active="true"
+              >
+                Chat
+              </button>
+              <button id="tab-document" class="apple-btn-secondary" style="padding: 8px 12px; font-size: 12px;">
+                Documento
+              </button>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <select
+                id="conversation-select"
+                class="apple-input"
+                style="max-width: 230px; font-size: 12px;"
+              ></select>
+              <button
+                id="new-conversation-btn"
+                class="apple-btn-secondary"
+                style="padding: 8px 10px; font-size: 12px;"
+              >
+                Nueva
+              </button>
+            </div>
+          </div>
+
+          <div id="chat-panel" style="margin-top: 14px;">
+            <div id="chat-messages" style="height: 62vh; overflow-y: auto; border: 1px solid var(--apple-separator); border-radius: 14px; padding: 10px;"></div>
+
+            <form id="chat-form" style="margin-top: 10px; display: flex; gap: 8px; align-items: center; max-width: 760px;">
+              <input
+                id="chat-input"
+                type="text"
+                placeholder="Pregunta algo sobre tus documentos…"
+                class="apple-input"
+                style="flex: 0 1 620px;"
+              />
+              <button type="submit" class="apple-btn-primary">Enviar</button>
+            </form>
+
+            <p style="margin-top: 8px; font-size: 12px; color: var(--apple-text-secondary);">
+              El asistente responde usando el texto extraído de tus documentos. Si el servicio no está disponible, verás
+              una respuesta alternativa para poder seguir.
+            </p>
+          </div>
+
+          <div id="document-panel" class="hidden" style="margin-top: 14px;">
+            <div class="apple-card" style="padding: 12px;">
+              <div style="display: flex; align-items: start; justify-content: space-between; gap: 10px;">
+                <div>
+                  <p style="font-size: 12px; color: var(--apple-text-secondary);">Documento seleccionado</p>
+                  <h3 id="doc-title" style="margin-top: 6px; font-size: 14px;">—</h3>
+                  <p id="doc-status" style="margin-top: 6px; font-size: 12px; color: var(--apple-text-secondary);">—</p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button id="gen-resumen-btn" class="apple-btn-secondary" style="font-size: 12px; padding: 8px 10px;">Generar resumen</button>
+                  <button id="gen-flashcards-btn" class="apple-btn-secondary" style="font-size: 12px; padding: 8px 10px;">Generar flashcards</button>
+                  <button id="gen-test-btn" class="apple-btn-secondary" style="font-size: 12px; padding: 8px 10px;">Generar test</button>
+                </div>
+              </div>
+
+              <div id="doc-error" class="hidden" style="margin-top: 10px;"></div>
+            </div>
+
+            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="apple-card" style="padding: 12px;">
+                <h4 style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase;">Resumen / artefactos</h4>
+                <div id="doc-artefacts" style="margin-top: 10px;"></div>
+              </div>
+              <div class="apple-card" style="padding: 12px;">
+                <h4 style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase;">Texto extraído</h4>
+                <div id="doc-chunks" style="margin-top: 10px;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="apple-card" style="padding: 14px;">
+            <h2 style="font-size: 14px; font-weight: 600;">Artefactos</h2>
+            <div style="margin-top: 10px;">
+              <div>
+                <p style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase;">Resúmenes</p>
+                <div id="resumenes-list" style="margin-top: 8px;"></div>
+              </div>
+              <div>
+                <p style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase; margin-top: 12px;">Flashcards</p>
+                <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                  <p id="flashcards-count">—</p>
+                  <a id="start-flashcards" href="/app/estudio/flashcards" class="apple-btn-secondary" style="font-size: 12px; padding: 8px 10px;">Estudiar</a>
+                </div>
+              </div>
+              <div>
+                <p style="font-size: 12px; color: var(--apple-text-secondary); text-transform: uppercase; margin-top: 12px;">Tests</p>
+                <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                  <p id="tests-count">—</p>
+                  <a id="start-test" href="/app/estudio/test" class="apple-btn-secondary" style="font-size: 12px; padding: 8px 10px;">Practicar</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="apple-card" style="padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h2 style="font-size: 14px; font-weight: 600;">Notas</h2>
+              <a href="/app/notas" class="apple-nav-link" style="font-size: 12px;">Ver todas</a>
+            </div>
+            <div id="notes-list" style="margin-top: 10px;"></div>
+          </div>
+
+        </aside>
+      </div>
+    </main>
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>

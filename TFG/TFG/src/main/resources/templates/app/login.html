@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Acceso · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="login" class="apple-shell">
+    <main style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+      <div class="apple-panel" style="max-width: 440px; width: 100%; padding: 32px;">
+        <div th:if="${param.expired}" class="apple-feedback wrong" style="margin-bottom: 18px;">
+          Tu sesión ha expirado. Por favor inicia sesión de nuevo.
+        </div>
+
+        <h1 class="apple-page-title" style="font-size: 28px;">Easy4You</h1>
+        <p class="apple-page-subtitle">Accede para usar tu notebook.</p>
+
+        <form id="login-form" style="margin-top: 22px; display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label for="login-email" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Email</label>
+            <input id="login-email" type="email" required autocomplete="email" placeholder="tu@email.com" class="apple-input" />
+          </div>
+          <div>
+            <label for="login-password" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Contraseña</label>
+            <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••" class="apple-input" />
+          </div>
+          <button type="submit" class="apple-btn-primary" style="margin-top: 4px;">Entrar</button>
+        </form>
+
+        <hr class="apple-divider" />
+
+        <h2 class="apple-panel-title">¿No tienes cuenta?</h2>
+        <p class="apple-page-subtitle" style="margin-top: 4px;">Crea una cuenta local para probar el flujo completo.</p>
+
+        <form id="register-form" style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label for="reg-nombre" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Nombre</label>
+              <input id="reg-nombre" type="text" required placeholder="Pedro" class="apple-input" />
+            </div>
+            <div>
+              <label for="reg-apellidos" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Apellidos</label>
+              <input id="reg-apellidos" type="text" required placeholder="García" class="apple-input" />
+            </div>
+          </div>
+          <div>
+            <label for="reg-email" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Email</label>
+            <input id="reg-email" type="email" required autocomplete="email" placeholder="tu@email.com" class="apple-input" />
+          </div>
+          <div>
+            <label for="reg-password" style="display:block; font-size: 12px; color: var(--apple-text-secondary); margin-bottom: 4px;">Contraseña</label>
+            <input id="reg-password" type="password" required autocomplete="new-password" placeholder="Mínimo 6 caracteres" class="apple-input" />
+          </div>
+          <button type="submit" class="apple-btn-secondary" style="margin-top: 4px;">Crear cuenta</button>
+        </form>
+      </div>
+    </main>
+
+    <div id="toast-root"></div>
+  </body>
+</html>

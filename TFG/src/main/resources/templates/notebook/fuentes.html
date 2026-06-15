@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Fuentes · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="notebook-sources" th:attr="data-notebook-id=${notebookId}" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+          <a th:href="@{/app/notebooks/{id}(id=${notebookId})}" class="apple-back-btn" aria-label="Volver al notebook">
+            <span class="apple-back-icon">←</span><span>Volver</span>
+          </a>
+          <div style="min-width:0;">
+            <p style="font-size: 12px; color: var(--apple-text-secondary); margin: 0;">Fuentes del notebook</p>
+            <h1 id="notebook-title" style="font-size: 15px; font-weight: 600; margin: 2px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cargando…</h1>
+          </div>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="apple-container fuentes-main">
+      <div class="fuentes-hero">
+        <h2 class="fuentes-hero-title">Gestiona tus fuentes</h2>
+        <p class="fuentes-hero-subtitle">
+          Sube documentos y organízalos por temas para que la IA pueda generar resúmenes, flashcards y tests.
+        </p>
+      </div>
+
+      <div class="apple-grid-2 wide-left fuentes-grid">
+        <section class="apple-panel fuentes-side">
+          <div class="fuentes-section">
+            <h2 class="apple-panel-title">Subir fuente</h2>
+            <p class="apple-page-subtitle">Soporta PDF, DOCX, TXT, MD y ZIP. Se procesa en segundo plano.</p>
+
+            <form id="upload-form" class="fuentes-upload-form">
+              <div>
+                <label for="upload-file" class="fuentes-field-label">Archivo</label>
+                <label for="upload-file" id="upload-file-label" class="fuentes-file-drop">
+                  <span class="fuentes-file-drop-icon" aria-hidden="true">⬆︎</span>
+                  <span class="fuentes-file-drop-text">Selecciona un archivo (PDF, DOCX, TXT, MD, ZIP)</span>
+                </label>
+                <input id="upload-file" type="file" required class="fuentes-file-input" accept=".pdf,.doc,.docx,.txt,.md,.zip" />
+              </div>
+              <div>
+                <label for="upload-tema" class="fuentes-field-label">Tema (recomendado)</label>
+                <select id="upload-tema" class="apple-input">
+                  <option value="">Sin tema</option>
+                </select>
+                <p class="fuentes-hint">
+                  Los resúmenes, flashcards y tests requieren un tema asignado.
+                </p>
+              </div>
+              <button type="submit" class="apple-btn-primary fuentes-submit-btn">Subir y procesar</button>
+            </form>
+          </div>
+
+          <hr class="apple-divider" />
+
+          <div class="fuentes-section">
+            <h3 class="apple-panel-title">Temas</h3>
+            <p class="apple-page-subtitle">Crea un tema rápido para asignar documentos.</p>
+
+            <form id="create-tema-form" class="fuentes-tema-form">
+              <input id="create-tema-title" type="text" required placeholder="Ej: Tema 1 · Redes" class="apple-input" />
+              <button type="submit" class="apple-btn-secondary">Crear</button>
+            </form>
+
+            <div id="temas-list" class="fuentes-temas-list"></div>
+          </div>
+        </section>
+
+        <section class="apple-panel fuentes-main-panel">
+          <div class="fuentes-docs-header">
+            <div>
+              <h2 class="apple-panel-title">Documentos</h2>
+              <p id="docs-counter" class="fuentes-docs-counter">0 documentos</p>
+            </div>
+            <button id="refresh-docs" type="button" class="apple-btn-secondary fuentes-refresh-btn" title="Actualizar">
+              <span aria-hidden="true">↻</span>
+              <span>Actualizar</span>
+            </button>
+          </div>
+
+          <div id="docs-list" class="fuentes-docs-list"></div>
+          <div id="docs-empty" class="hidden fuentes-empty">
+            <div class="fuentes-empty-icon" aria-hidden="true">📄</div>
+            <p class="fuentes-empty-title">Aún no hay documentos</p>
+            <p class="fuentes-empty-sub">Sube tu primera fuente desde el panel izquierdo para empezar.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>

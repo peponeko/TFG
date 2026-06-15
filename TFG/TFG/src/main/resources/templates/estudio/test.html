@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Test · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="study-test" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button type="button" class="apple-back-btn" onclick="if (history.length > 1) history.back(); else window.location.href='/app/notebooks';" aria-label="Atrás">
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notebooks" class="apple-nav-link">Notebooks</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="apple-container" style="padding-top: 18px; max-width: 720px;">
+      <h1 class="apple-page-title">Sesión de test</h1>
+      <p class="apple-page-subtitle">Responde a las preguntas y comprueba tu nivel.</p>
+
+      <section class="apple-panel" style="margin-top: 22px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <p id="test-counter" class="apple-pill">—</p>
+          <button id="restart-test-btn" class="apple-btn-secondary" style="padding:8px 12px; font-size:12px;">Reiniciar</button>
+        </div>
+
+        <div style="margin-top: 18px; border:1px solid var(--apple-separator); border-radius: 14px; padding: 22px; background: #fbfbfd;">
+          <p id="question-text" style="font-size: 17px; font-weight: 600; margin: 0;">—</p>
+          <div id="options-box" style="margin-top: 16px;"></div>
+          <div id="answer-feedback" class="hidden"></div>
+        </div>
+
+        <div style="margin-top: 14px; display: flex;">
+          <button id="next-question-btn" class="apple-btn-primary" style="flex:1;">Siguiente</button>
+        </div>
+
+        <p id="test-empty" class="hidden" style="margin-top: 18px; color: var(--apple-text-secondary); font-size: 14px;">
+          No hay preguntas para este documento/tema. Genera tests desde la vista del documento.
+        </p>
+      </section>
+    </main>
+
+    <div id="toast-root"></div>
+  </body>
+</html>

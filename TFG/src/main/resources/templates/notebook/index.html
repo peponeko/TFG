@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Notebooks · Easy4You" />
+    <title>Notebooks · Easy4You</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+  <body data-page="notebook-index" class="apple-shell">
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/home';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+    <main class="apple-container">
+      <section class="apple-hero">
+        <h1 class="apple-hero-title" style="font-size: 36px">Tus notebooks</h1>
+        <p class="apple-hero-subtitle">Sube fuentes, chatea con IA y genera material de estudio.</p>
+      </section>
+      <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+        <button id="open-create-notebook" class="apple-btn-primary">Nuevo notebook</button>
+      </div>
+      <section style="margin-top: 24px; border-top: 1px solid var(--apple-separator); padding-top: 16px;">
+        <div id="notebooks-list" class="apple-grid"></div>
+        <div id="notebooks-empty" class="apple-card hidden" style="padding: 24px; margin-top: 16px;">
+          <h2 style="margin: 0; font-size: 18px;">Aún no tienes notebooks</h2>
+          <p style="margin: 8px 0 0; color: var(--apple-text-secondary);">Crea uno para empezar.</p>
+        </div>
+      </section>
+      <section style="margin-top: 28px;">
+        <h2 style="font-size: 13px; color: var(--apple-text-secondary); text-transform: uppercase; letter-spacing: 0.08em;">Compartidos conmigo</h2>
+        <div id="shared-list" class="apple-grid" style="margin-top: 12px;"></div>
+        <p id="shared-empty" class="hidden" style="margin-top: 12px; color: var(--apple-text-secondary);">Nadie te ha compartido notebooks todavía.</p>
+      </section>
+    </main>
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>

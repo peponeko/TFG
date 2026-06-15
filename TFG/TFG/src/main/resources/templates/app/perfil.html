@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perfil · Easy4You</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --apple-bg: #f5f5f7;
+        --apple-card: #ffffff;
+        --apple-text: #1d1d1f;
+        --apple-text-secondary: #6e6e73;
+        --apple-separator: rgba(0, 0, 0, 0.12);
+      }
+      html,
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+        background: var(--apple-bg);
+        color: var(--apple-text);
+      }
+      .apple-card {
+        background: var(--apple-card);
+        border: 1px solid var(--apple-separator);
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      }
+      .apple-btn-secondary {
+        border: 1px solid var(--apple-separator);
+        background: #fff;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .apple-btn-primary {
+        background: #1d1d1f;
+        color: white;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .apple-input {
+        width: 100%;
+        border: 1px solid var(--apple-separator);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 14px;
+        background: #fff;
+      }
+      .toast-root {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 60;
+      }
+      .modal-root.hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body data-page="perfil" class="min-h-screen">
+    <div id="toast-root" class="toast-root"></div>
+    <div id="modal-root" class="modal-root hidden"></div>
+
+    <header class="mx-auto max-w-3xl px-4 pt-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs" style="color: var(--apple-text-secondary)">Easy4You</p>
+          <h1 class="text-xl font-bold tracking-tight">Perfil</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="/app/home" class="apple-btn-secondary">Volver</a>
+          <button id="logout-btn" class="apple-btn-secondary">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-3xl px-4 py-6">
+      <section class="apple-card p-5">
+        <p class="text-sm" style="color: var(--apple-text-secondary)">
+          Aquí puedes actualizar tu nombre, apellidos y nivel académico.
+        </p>
+
+        <form id="perfil-form" class="mt-4 space-y-3">
+          <div>
+            <label class="block text-xs font-semibold" style="color: var(--apple-text-secondary)">Nombre</label>
+            <input id="perfil-nombre" class="apple-input mt-1" maxlength="100" placeholder="Tu nombre" required />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold" style="color: var(--apple-text-secondary)">Apellidos</label>
+            <input id="perfil-apellidos" class="apple-input mt-1" maxlength="150" placeholder="Tus apellidos (opcional)" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold" style="color: var(--apple-text-secondary)">Nivel académico</label>
+            <select id="perfil-nivel-estudio" class="apple-input mt-1">
+              <option value="">Selecciona tu nivel</option>
+              <option value="universitario">Estudiante universitario</option>
+              <option value="ciclo-superior">Ciclo superior</option>
+              <option value="ciclo-medio">Ciclo medio</option>
+              <option value="eso-bachillerato">ESO o Bachillerato</option>
+              <option value="primaria">Primaria</option>
+              <option value="no-estudiante">No estudiante</option>
+            </select>
+          </div>
+          <button type="submit" class="apple-btn-primary w-full">Guardar cambios</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="/js/app.js"></script>
+  </body>
+</html>
+

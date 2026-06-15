@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta property="og:title" content="Temas · Easy4You" />
+    <title>Temas · Easy4You</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <script th:src="@{/js/app.js}" defer></script>
+  </head>
+
+  <body
+    data-page="home-temas"
+    th:attr="data-asignatura-id=${asignaturaId}, data-trimestre=${trimestre}"
+    class="apple-shell"
+  >
+    <header class="apple-header">
+      <div class="apple-header-inner">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button
+            type="button"
+            class="apple-back-btn"
+            onclick="if (history.length > 1) history.back(); else window.location.href='/app/home';"
+            aria-label="Atrás"
+          >
+            <span class="apple-back-icon">←</span><span>Atrás</span>
+          </button>
+          <a href="/app/home" class="apple-logo">Easy4You</a>
+        </div>
+        <nav class="apple-nav">
+          <a href="/app/notas" class="apple-nav-link">Notas</a>
+          <button id="logout-btn" class="apple-logout-btn">Salir</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="apple-container">
+      <div class="apple-breadcrumb" id="breadcrumb">
+        <a href="/app/home">Inicio</a> <span aria-hidden="true">›</span> <a id="breadcrumb-asignatura" href="#">—</a>
+        <span aria-hidden="true">›</span> <span id="breadcrumb-trimestre">—</span>
+      </div>
+
+      <h1 class="apple-section-title" style="margin-top: 10px;">
+        <span id="page-title">Cargando…</span>
+      </h1>
+
+      <div class="apple-search-wrap">
+        <svg class="apple-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-4.35-4.35m1.1-5.4a7.25 7.25 0 11-14.5 0 7.25 7.25 0 0114.5 0z"
+          />
+        </svg>
+        <input id="temas-search" type="search" class="apple-search" placeholder="Buscar temas..." />
+      </div>
+
+      <div style="margin-top: 18px;">
+        <div id="temas-list"></div>
+        <div id="temas-empty" style="display: none; text-align: center; margin-top: 30px;">
+          <p style="margin: 0; color: var(--apple-text-secondary);">Aún no tienes temas en este trimestre</p>
+          <div style="margin-top: 16px;">
+            <button id="btn-add-first-tema" class="apple-btn-primary">Añadir primer tema</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="fab-menu" class="fab-menu" data-open="false">
+      <div class="fab-menu-items">
+        <div class="fab-mini" style="animation: floatIn 0.2s ease 0ms both;">
+          <span class="fab-mini-label">Nuevo tema</span>
+          <button id="fab-new-tema" class="fab-mini-btn" aria-label="Nuevo tema">+</button>
+        </div>
+        <div class="fab-mini" style="animation: floatIn 0.2s ease 50ms both;">
+          <span class="fab-mini-label">Subir documento</span>
+          <button id="fab-upload-doc" class="fab-mini-btn" aria-label="Subir documento">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="fab-mini" style="animation: floatIn 0.2s ease 100ms both;">
+          <span class="fab-mini-label">Nueva unidad</span>
+          <button id="fab-new-unidad" class="fab-mini-btn" aria-label="Nueva unidad">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button id="fab-main" class="apple-fab" aria-label="Menú">+</button>
+    </div>
+
+    <div id="modal-root" class="hidden"></div>
+    <div id="toast-root"></div>
+  </body>
+</html>
+

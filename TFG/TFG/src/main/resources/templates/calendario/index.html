@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calendario · Easy4You</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --apple-bg: #f5f5f7;
+        --apple-card: #ffffff;
+        --apple-text: #1d1d1f;
+        --apple-text-secondary: #6e6e73;
+        --apple-separator: rgba(0, 0, 0, 0.12);
+      }
+      html,
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+        background: var(--apple-bg);
+        color: var(--apple-text);
+      }
+      .apple-card {
+        background: var(--apple-card);
+        border: 1px solid var(--apple-separator);
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      }
+      .apple-btn-secondary {
+        border: 1px solid var(--apple-separator);
+        background: #fff;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .apple-btn-primary {
+        background: #1d1d1f;
+        color: white;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .apple-input {
+        width: 100%;
+        border: 1px solid var(--apple-separator);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 14px;
+        background: #fff;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        max-width: 100%;
+      }
+      .chip .t {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 220px;
+      }
+      .day-cell {
+        min-height: 112px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
+        padding: 10px;
+        background: #fff;
+      }
+      .day-cell.is-out {
+        opacity: 0.55;
+        background: rgba(255, 255, 255, 0.65);
+      }
+      .day-num {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--apple-text-secondary);
+      }
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .toast-root {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 60;
+      }
+      .modal-root.hidden {
+        display: none;
+      }
+      .apple-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 70;
+      }
+      .apple-modal {
+        width: 100%;
+        max-width: 560px;
+        background: #fff;
+        border-radius: 22px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        padding: 16px;
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.25);
+      }
+    </style>
+  </head>
+  <body data-page="calendar" class="min-h-screen">
+    <div id="toast-root" class="toast-root"></div>
+    <div id="modal-root" class="modal-root hidden"></div>
+
+    <header class="mx-auto max-w-6xl px-4 pt-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs" style="color: var(--apple-text-secondary)">Easy4You</p>
+          <h1 class="text-xl font-bold tracking-tight">Calendario</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="/app/home" class="apple-btn-secondary">Volver</a>
+          <button id="logout-btn" class="apple-btn-secondary">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 py-6">
+      <section class="apple-card p-4">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div class="flex items-center gap-2">
+            <button id="cal-prev" class="apple-btn-secondary">◀</button>
+            <button id="cal-today" class="apple-btn-secondary">Hoy</button>
+            <button id="cal-next" class="apple-btn-secondary">▶</button>
+            <p id="cal-title" class="ml-2 text-sm font-semibold"></p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 text-xs" style="color: var(--apple-text-secondary)">
+            <span class="inline-flex items-center gap-2"
+              ><span class="legend-dot" style="background: #2563eb"></span> Examen</span
+            >
+            <span class="inline-flex items-center gap-2"
+              ><span class="legend-dot" style="background: #7c3aed"></span> Entrega</span
+            >
+            <span class="inline-flex items-center gap-2"
+              ><span class="legend-dot" style="background: #d97706"></span> Recuperación</span
+            >
+            <span class="inline-flex items-center gap-2"
+              ><span class="legend-dot" style="background: #059669"></span> Sesión estudio</span
+            >
+            <span class="inline-flex items-center gap-2"
+              ><span class="legend-dot" style="background: #6b7280"></span> Otro</span
+            >
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-7 gap-2 text-xs font-semibold" style="color: var(--apple-text-secondary)">
+          <div class="text-center">L</div>
+          <div class="text-center">M</div>
+          <div class="text-center">X</div>
+          <div class="text-center">J</div>
+          <div class="text-center">V</div>
+          <div class="text-center">S</div>
+          <div class="text-center">D</div>
+        </div>
+
+        <div id="cal-grid" class="mt-2 grid grid-cols-7 gap-2"></div>
+      </section>
+    </main>
+
+    <script src="/js/app.js"></script>
+  </body>
+</html>
+

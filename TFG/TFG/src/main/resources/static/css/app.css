@@ -1,0 +1,85 @@
+/* ---------------------------------------------------------------------------
+   Punto de entrada de estilos del frontend (vistas /app/**).
+   Importa el tema principal "Apple" y añade unas pocas utilidades globales.
+
+   IMPORTANTE: la regla @import tiene que ir SIEMPRE al principio del archivo
+   (solo puede ir despues de @charset). Si se coloca despues de otras reglas el
+   navegador la ignora por completo y el tema no se carga.
+   --------------------------------------------------------------------------- */
+@import url("apple-theme.css");
+
+:root {
+  /* La UI principal usa el tema "Apple" en claro.
+     Evita que el navegador fuerce colores oscuros por color-scheme. */
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "SF Pro Display", Inter, ui-sans-serif, system-ui, -apple-system,
+    Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: var(--apple-bg);
+  color: var(--apple-text);
+}
+
+/* Utilidad usada por app.js para ocultar modales, estados vacios, etc. */
+.hidden {
+  display: none !important;
+}
+
+#toast-root {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+#modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.e4y-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.e4y-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+}
+
+/* Acceso rápido al calendario desde la home */
+.apple-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 18px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--apple-text);
+  background: var(--apple-bg-secondary, #f2f2f7);
+  border: 1px solid var(--apple-separator, rgba(0, 0, 0, 0.12));
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.apple-hero-cta:hover {
+  background: #e5e5ea;
+  transform: translateY(-1px);
+}
