@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Easy4You",
+      "request": "launch",
+      "mainClass": "com.easy4you.Easy4YouApplication",
+      "projectName": "easy4you",
+      "cwd": "${workspaceFolder}/TFG/TFG",
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnSessionStart"
+    },
+    {
+      "type": "java",
+      "name": "Easy4You (sin depurar)",
+      "request": "launch",
+      "mainClass": "com.easy4you.Easy4YouApplication",
+      "projectName": "easy4you",
+      "cwd": "${workspaceFolder}/TFG/TFG",
+      "noDebug": true,
+      "console": "internalConsole"
+    }
+  ]
+}

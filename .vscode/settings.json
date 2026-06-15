@@ -1,0 +1,5 @@
+{
+  "java.debug.settings.connectTimeout": 180000,
+  "java.debug.settings.console": "internalConsole",
+  "java.configuration.updateBuildConfiguration": "automatic"
+}
