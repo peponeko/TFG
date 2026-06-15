@@ -1,0 +1,9 @@
+# Datos de ejecucion y temporales
+uploads/
+tmp_ref_pages/
+
+# IDE / build (por si se generan en la raiz)
+target/
+.idea/
+*.iml
+.DS_Store
