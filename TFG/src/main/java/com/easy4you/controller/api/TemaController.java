@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/temas")
@@ -30,6 +31,7 @@ public class TemaController {
   private final TemaService temaService;
   private final AuthenticatedUserService authenticatedUserService;
 
+  @Transactional(readOnly = true)
   @GetMapping
   public ResponseEntity<List<TemaResponseDTO>> listar(
       @RequestParam(required = false) Long unidadId, @RequestParam(required = false) Long asignaturaId) {
@@ -45,10 +47,12 @@ public class TemaController {
       throw new BadRequestException("unidadId o asignaturaId es obligatorio");
     }
 
-    List<TemaResponseDTO> response = temas.stream().map(this::toResponse).toList();
+    // Listados: omitir LONGTEXT descripcion para no bloquear el hilo servlet ni hinchar JSON.
+    List<TemaResponseDTO> response = temas.stream().map(this::toListaItem).toList();
     return ResponseEntity.ok(response);
   }
 
+  @Transactional(readOnly = true)
   @GetMapping("/{id}")
   public ResponseEntity<TemaResponseDTO> obtener(@PathVariable Long id) {
     Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
@@ -84,6 +88,20 @@ public class TemaController {
     Long usuarioId = authenticatedUserService.requireUsuarioActual().getId();
     temaService.eliminarDeUsuario(usuarioId, id);
     return ResponseEntity.noContent().build();
+  }
+
+  /** Item de listado GET /temas sin descripción (evita cargar Lob). */
+  private TemaResponseDTO toListaItem(Tema tema) {
+    return new TemaResponseDTO(
+        tema.getId(),
+        tema.getAsignatura() != null ? tema.getAsignatura().getId() : null,
+        tema.getTitulo(),
+        null,
+        tema.getOrden(),
+        tema.getPalabrasClave(),
+        tema.getTrimestre(),
+        tema.getCreatedAt(),
+        tema.getUpdatedAt());
   }
 
   private TemaResponseDTO toResponse(Tema tema) {

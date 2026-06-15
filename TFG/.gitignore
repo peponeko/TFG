@@ -7,3 +7,12 @@ uploads/
 .DS_Store
 *.jar
 easy4you-android/
+
+# Documentacion, exports y SQL sueltos (Flyway en db/migration es lo que usa la app)
+docs/
+codigo_proyecto.txt
+proyecto-entero.txt
+ProyectoEntero2.txt
+easy4you_db.sql
+easy4you_*.sql
+!src/main/resources/db/migration/*.sql

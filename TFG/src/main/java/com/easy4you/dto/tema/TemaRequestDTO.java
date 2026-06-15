@@ -14,6 +14,7 @@ import lombok.Setter;
 public class TemaRequestDTO {
   private Long unidadId;
   private Long asignaturaId;
+  private Long unidadTematicaId;
 
   @NotBlank
   @Size(max = 200)

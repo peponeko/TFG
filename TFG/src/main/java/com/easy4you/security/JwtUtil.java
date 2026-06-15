@@ -82,11 +82,18 @@ public class JwtUtil {
   }
 
   private SecretKey getSigningKey() {
+    if (jwtSecret == null || jwtSecret.isBlank()) {
+      throw new IllegalStateException("JWT secret no configurado (app.jwt.secret / JWT_SECRET)");
+    }
     byte[] keyBytes;
     try {
       keyBytes = Decoders.BASE64.decode(jwtSecret);
     } catch (IllegalArgumentException ex) {
       keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+    }
+    if (keyBytes.length < 32) {
+      throw new IllegalStateException(
+          "JWT secret demasiado corto. Usa al menos 32 bytes (256 bits). Recomendado: Base64 de 32+ bytes aleatorios.");
     }
     return Keys.hmacShaKeyFor(keyBytes);
   }

@@ -19,6 +19,8 @@ public class TemaRapidoRequestDTO {
   // 1,2,3 o 0/null (General)
   private Integer trimestre;
 
+  private Long unidadTematicaId;
+
   @NotBlank
   @Size(max = 200)
   private String titulo;

@@ -8,7 +8,9 @@ import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,19 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 // Carga datos iniciales (roles y usuario admin) al arrancar la aplicación
+@ConditionalOnProperty(name = "app.bootstrap.enabled", havingValue = "true", matchIfMissing = false)
 public class DataLoader implements CommandLineRunner {
 
   private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
 
-  private static final String ADMIN_EMAIL = "admin@easy4you.com";
-  private static final String ADMIN_PASSWORD = "Admin1234!";
+  @Value("${app.bootstrap.admin.email:}")
+  private String adminEmail;
 
-  /**
-   * Hash de ejemplo de BCrypt para la contraseña "password" (el que venía en el SQL inicial).
-   * Si detectamos este hash, lo consideramos placeholder y lo reemplazamos por la contraseña del admin.
-   */
-  private static final String PLACEHOLDER_BCRYPT_PASSWORD_HASH =
-      "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p922MY8W0QFH0Y2VqLHBci";
+  @Value("${app.bootstrap.admin.password:}")
+  private String adminPassword;
 
   private final UsuarioRepository usuarioRepository;
   private final RolRepository rolRepository;
@@ -40,33 +39,43 @@ public class DataLoader implements CommandLineRunner {
     Rol rolAdmin = ensureRol("ADMIN", "Administrador del sistema");
     Rol rolUser = ensureRol("USER", "Usuario estándar");
 
+    if (adminEmail == null || adminEmail.isBlank()) {
+      log.info("Bootstrap desactivado: no se ha configurado app.bootstrap.admin.email");
+      return;
+    }
+
+    if (adminPassword == null || adminPassword.isBlank()) {
+      log.warn("Bootstrap desactivado: no se ha configurado app.bootstrap.admin.password");
+      return;
+    }
+
     Usuario admin =
         usuarioRepository
-            .findTopByEmailOrderByIdAsc(ADMIN_EMAIL)
+            .findTopByEmailOrderByIdAsc(adminEmail.trim())
             .orElseGet(
                 () -> {
                   Usuario u = new Usuario();
                   u.setNombre("Administrador");
                   u.setApellidos("Easy4You");
-                  u.setEmail(ADMIN_EMAIL);
+                  u.setEmail(adminEmail.trim());
+                  u.setActivo(true);
+                  u.setVerificado(true);
                   return u;
                 });
 
-    admin.setActivo(true);
-    admin.setVerificado(true);
-
-    if (admin.getRoles() == null) {
-      admin.setRoles(new HashSet<>());
+    // Por seguridad: no reseteamos contraseñas existentes. Solo creamos si faltaba.
+    if (admin.getId() == null) {
+      admin.setPasswordHash(passwordEncoder.encode(adminPassword));
+      if (admin.getRoles() == null) {
+        admin.setRoles(new HashSet<>());
+      }
+      admin.getRoles().add(rolAdmin);
+      admin.getRoles().add(rolUser);
+      usuarioRepository.save(admin);
+      log.info("Bootstrap: usuario admin creado (email={})", admin.getEmail());
+    } else {
+      log.info("Bootstrap: usuario admin ya existe (email={})", admin.getEmail());
     }
-    admin.getRoles().add(rolAdmin);
-    admin.getRoles().add(rolUser);
-
-    if (shouldResetAdminPassword(admin.getPasswordHash())) {
-      admin.setPasswordHash(passwordEncoder.encode(ADMIN_PASSWORD));
-      log.warn("Admin bootstrap: password actualizado para {} (valor por defecto)", ADMIN_EMAIL);
-    }
-
-    usuarioRepository.save(admin);
   }
 
   private Rol ensureRol(String nombre, String descripcion) {
@@ -81,17 +90,5 @@ public class DataLoader implements CommandLineRunner {
             });
   }
 
-  private boolean shouldResetAdminPassword(String passwordHash) {
-    if (passwordHash == null || passwordHash.isBlank()) {
-      return true;
-    }
-    if (PLACEHOLDER_BCRYPT_PASSWORD_HASH.equals(passwordHash)) {
-      return true;
-    }
-    return !looksLikeBcrypt(passwordHash);
-  }
-
-  private boolean looksLikeBcrypt(String hash) {
-    return hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$");
-  }
+  // Nota: evitamos lógica de "reset admin" automático para no introducir puertas traseras.
 }

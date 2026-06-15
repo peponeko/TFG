@@ -2,8 +2,14 @@
 uploads/
 tmp_ref_pages/
 
-# IDE / build (por si se generan en la raiz)
+# Exports y documentacion del TFG
+*.txt
+!TFG/src/**/*.txt
+
+# IDE / build
 target/
 .idea/
 *.iml
 .DS_Store
+*.class
+*.jar

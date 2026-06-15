@@ -16,6 +16,37 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
 
   List<Documento> findByTemaId(Long temaId);
 
+  /** Evita N+1 y errores fuera de sesión al mapear a DTO sin OSIV (join solo ManyToOne, sin texto LONGTEXT). */
+  @Query(
+      """
+      select distinct d from Documento d
+      join fetch d.usuario
+      join fetch d.asignatura
+      left join fetch d.tema
+      where d.asignatura.id = :asignaturaId
+      """)
+  List<Documento> findByAsignaturaIdFetchingRelations(@Param("asignaturaId") Long asignaturaId);
+
+  @Query(
+      """
+      select distinct d from Documento d
+      join fetch d.usuario
+      join fetch d.asignatura
+      left join fetch d.tema
+      where d.tema.id = :temaId
+      """)
+  List<Documento> findByTemaIdFetchingRelations(@Param("temaId") Long temaId);
+
+  @Query(
+      """
+      select distinct d from Documento d
+      join fetch d.usuario
+      join fetch d.asignatura
+      left join fetch d.tema
+      where d.usuario.id = :usuarioId
+      """)
+  List<Documento> findByUsuarioIdFetchingRelations(@Param("usuarioId") Long usuarioId);
+
   List<Documento> findByAsignaturaIdAndTemaId(Long asignaturaId, Long temaId);
 
   Optional<Documento> findTopByUsuarioIdAndChecksumSha256(Long usuarioId, String checksumSha256);

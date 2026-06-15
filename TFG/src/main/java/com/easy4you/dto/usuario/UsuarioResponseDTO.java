@@ -16,6 +16,7 @@ public class UsuarioResponseDTO {
   private String nombre;
   private String apellidos;
   private String email;
+  private String nivelEstudio;
   private String imagenUrl;
   private boolean activo;
   private boolean verificado;

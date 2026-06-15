@@ -163,7 +163,7 @@ public class AsignaturaServiceImpl implements AsignaturaService {
 
     List<TemaPlanoResponseDTO> response = new ArrayList<>();
     for (Object[] row : temas) {
-      if (row == null || row.length < 5) {
+      if (row == null || row.length < 6) {
         continue;
       }
       Long temaId = row[0] instanceof Number ? ((Number) row[0]).longValue() : null;
@@ -173,13 +173,15 @@ public class AsignaturaServiceImpl implements AsignaturaService {
       String titulo = row[1] == null ? null : String.valueOf(row[1]);
       String descripcion = row[2] == null ? null : String.valueOf(row[2]);
       String palabrasClave = row[3] == null ? null : String.valueOf(row[3]);
-      Integer trimestre = row[4] instanceof Number ? ((Number) row[4]).intValue() : null;
+      Long unidadTematicaId = row[4] instanceof Number ? ((Number) row[4]).longValue() : null;
+      Integer trimestre = row[5] instanceof Number ? ((Number) row[5]).intValue() : null;
       response.add(
           new TemaPlanoResponseDTO(
               temaId,
               titulo,
               descripcion,
               palabrasClave,
+              unidadTematicaId,
               trimestre,
               docsCount.getOrDefault(temaId, 0L),
               flashCount.getOrDefault(temaId, 0L),

@@ -46,14 +46,14 @@ public class AiProperties {
   @Setter
   public static class OpenAi {
     /**
-     * Recomendado: inyectar vía variable de entorno, ej: ${OPENAI_API_KEY:}
+     * Recomendado: inyectar vía variable de entorno.
      */
     private String apiKey = "";
 
     /**
-     * Modelo por defecto para demo DAM: rápido y económico.
+     * Modelo por defecto.
      */
-    private String model = "gpt-4o-mini";
+    private String model = "gpt-4o";
   }
 }
 

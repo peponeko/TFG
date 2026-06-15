@@ -84,6 +84,7 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
   }
 
   @Async
+  @Transactional
   @Override
   public void generarParaDocumentoAsync(Long usuarioId, Long documentoId) {
     try {
@@ -91,13 +92,8 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
       updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.LISTO, null);
     } catch (Exception ex) {
       log.error("Error generando flashcards: documentoId={}, usuarioId={}", documentoId, usuarioId, ex);
-      updateDocumentoEstado(
-          usuarioId,
-          documentoId,
-          EstadoProcesadoDocumento.ERROR,
-          ex.getMessage() == null || ex.getMessage().isBlank()
-              ? "No se pudieron generar flashcards"
-              : ex.getMessage());
+      // No marcar el documento como ERROR de extracción: solo falló la generación con IA.
+      updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.PROCESADO, null);
     }
   }
 
@@ -149,8 +145,9 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
     String prompt = PromptTemplates.formatFlashcards(input, NUM_FLASHCARDS);
     // Gemini JSON Mode → devuelve JSON puro, sin necesidad de JsonExtractor
     String jsonArray = aiService.generarJson(prompt);
-    if (jsonArray == null || jsonArray.isBlank()) {
-      throw new ServiceUnavailableException("La IA no devolvió un JSON válido para flashcards");
+    if (jsonArray == null || jsonArray.isBlank() || "[]".equals(jsonArray.trim())) {
+      throw new ServiceUnavailableException(
+          "La IA no devolvió flashcards válidas. Comprueba OPENAI_API_KEY y el modelo configurado.");
     }
 
     List<FlashcardGenerated> generated = parseFlashcards(jsonArray);

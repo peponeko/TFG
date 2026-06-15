@@ -1109,8 +1109,7 @@
 }
 
 .fuentes-side {
-  position: sticky;
-  top: 76px;
+  position: relative;
 }
 
 .fuentes-section {

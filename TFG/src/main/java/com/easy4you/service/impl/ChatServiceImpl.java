@@ -31,7 +31,10 @@ import com.easy4you.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -167,10 +170,19 @@ public class ChatServiceImpl implements ChatService {
             .filter(this::isDocumentoUsableForChat)
             .toList();
 
-    String documentosContexto =
-        isGeneralOverviewQuestion(contenido)
-            ? buildOverviewContextFromFirstChunks(documentosActivos)
-            : buildRelevantContextFromChunks(documentosActivos, contenido);
+    String metadataContexto = buildDocumentMetadataContext(documentosActivos);
+    String documentosContexto;
+    if (isGeneralOverviewQuestion(contenido) || isMetadataQuestion(contenido)) {
+      documentosContexto = buildOverviewContextFromFirstChunks(documentosActivos);
+    } else {
+      documentosContexto = buildRelevantContextFromChunks(documentosActivos, contenido);
+    }
+    if (!metadataContexto.isBlank()) {
+      documentosContexto =
+          documentosContexto.isBlank()
+              ? metadataContexto
+              : metadataContexto + "\n\n" + documentosContexto;
+    }
     String assistantContent = generarContenidoAsistente(conversacionId, contenido, documentosContexto);
 
     ChatMensaje assistantMessage = new ChatMensaje();
@@ -395,6 +407,8 @@ public class ChatServiceImpl implements ChatService {
       return "";
     }
 
+    Map<Long, String> nombresPorDocId = nombresDocumentoPorId(documentosActivos);
+
     List<Long> docIds =
         documentosActivos.stream()
             .filter(Objects::nonNull)
@@ -407,13 +421,24 @@ public class ChatServiceImpl implements ChatService {
       return "";
     }
 
-    Page<DocumentoChunk> page;
+    Page<DocumentoChunk> page = Page.empty();
     try {
       page = documentoChunkRepository.searchFullText(docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+      if (page.getContent() == null || page.getContent().isEmpty()) {
+        page =
+            documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
+                docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+      }
     } catch (Exception ex) {
-      page =
-          documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
-              docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+      log.debug("FULLTEXT no disponible para chat, usando búsqueda por contiene: {}", ex.getMessage());
+      try {
+        page =
+            documentoChunkRepository.findByDocumentoIdInAndTextoContaining(
+                docIds, q, PageRequest.of(0, CONTEXT_MAX_CHUNKS));
+      } catch (Exception ex2) {
+        log.warn("Búsqueda de chunks falló en chat: {}", ex2.getMessage());
+        page = Page.empty();
+      }
     }
 
     if (page.getContent() == null || page.getContent().isEmpty()) {
@@ -434,13 +459,11 @@ public class ChatServiceImpl implements ChatService {
 
     StringBuilder sb = new StringBuilder();
     for (DocumentoChunk c : page.getContent()) {
-      if (c == null || c.getDocumento() == null) {
+      if (c == null) {
         continue;
       }
-      String nombre =
-          c.getDocumento().getNombreOriginal() == null || c.getDocumento().getNombreOriginal().isBlank()
-              ? "Documento"
-              : c.getDocumento().getNombreOriginal().trim();
+      Long docId = c.getDocumento() != null ? c.getDocumento().getId() : null;
+      String nombre = docId != null ? nombresPorDocId.getOrDefault(docId, "Documento") : "Documento";
       String texto = c.getTexto() == null ? "" : c.getTexto().trim();
       if (texto.isBlank()) {
         continue;
@@ -485,19 +508,83 @@ public class ChatServiceImpl implements ChatService {
       return sb.toString().trim();
     }
 
+    Map<Long, String> nombresPorDocId = nombresDocumentoPorId(documentosActivos);
     StringBuilder sb = new StringBuilder();
     for (DocumentoChunk c : page.getContent()) {
-      if (c == null || c.getDocumento() == null) continue;
-      String nombre =
-          c.getDocumento().getNombreOriginal() == null || c.getDocumento().getNombreOriginal().isBlank()
-              ? "Documento"
-              : c.getDocumento().getNombreOriginal().trim();
+      if (c == null) continue;
+      Long docId = c.getDocumento() != null ? c.getDocumento().getId() : null;
+      String nombre = docId != null ? nombresPorDocId.getOrDefault(docId, "Documento") : "Documento";
       String texto = c.getTexto() == null ? "" : c.getTexto().trim();
       if (texto.isBlank()) continue;
       sb.append("[Doc: ").append(nombre).append("]\n");
       sb.append(truncate(texto, CONTEXT_MAX_CHUNK_CHARS)).append("\n\n");
     }
     return sb.toString().trim();
+  }
+
+  private Map<Long, String> nombresDocumentoPorId(List<Documento> documentosActivos) {
+    Map<Long, String> map = new HashMap<>();
+    if (documentosActivos == null) {
+      return map;
+    }
+    for (Documento d : documentosActivos) {
+      if (d == null || d.getId() == null) {
+        continue;
+      }
+      String nombre =
+          d.getNombreOriginal() == null || d.getNombreOriginal().isBlank()
+              ? "Documento"
+              : d.getNombreOriginal().trim();
+      map.put(d.getId(), nombre);
+    }
+    return map;
+  }
+
+  private String buildDocumentMetadataContext(List<Documento> documentosActivos) {
+    if (documentosActivos == null || documentosActivos.isEmpty()) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("METADATOS DE DOCUMENTOS (datos del sistema, úsalos si preguntan por páginas, tamaño o nombre):\n");
+    for (Documento d : documentosActivos) {
+      if (d == null) {
+        continue;
+      }
+      String nombre =
+          d.getNombreOriginal() == null || d.getNombreOriginal().isBlank()
+              ? "Documento"
+              : d.getNombreOriginal().trim();
+      sb.append("- ").append(nombre);
+      if (d.getPaginas() != null && d.getPaginas() > 0) {
+        sb.append(": ").append(d.getPaginas()).append(" página").append(d.getPaginas() == 1 ? "" : "s");
+      } else {
+        sb.append(": páginas no registradas en el sistema");
+      }
+      if (d.getTamanoBytes() != null && d.getTamanoBytes() > 0) {
+        sb.append(", tamaño ").append(d.getTamanoBytes()).append(" bytes");
+      }
+      sb.append('\n');
+    }
+    return sb.toString().trim();
+  }
+
+  private boolean isMetadataQuestion(String contenido) {
+    if (contenido == null) {
+      return false;
+    }
+    String t = contenido.trim().toLowerCase(Locale.ROOT);
+    return t.contains("pagina")
+        || t.contains("página")
+        || t.contains("paginas")
+        || t.contains("páginas")
+        || t.contains("cuantas hojas")
+        || t.contains("cuántas hojas")
+        || t.contains("numero de paginas")
+        || t.contains("número de páginas")
+        || t.contains("cuanto mide")
+        || t.contains("cuánto mide")
+        || t.contains("tamano")
+        || t.contains("tamaño");
   }
 
   private boolean isGeneralOverviewQuestion(String contenido) {

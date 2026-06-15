@@ -26,6 +26,46 @@
       <div th:if="${ok}" class="alert success" th:text="${ok}">OK</div>
       <div th:if="${error}" class="alert error" th:text="${error}">Error</div>
 
+      <div class="card" style="margin-top: 14px;">
+        <div class="muted" style="font-weight: 700;">Crear asignatura</div>
+        <form th:action="@{/admin/asignaturas/crear}" method="post" th:object="${asignaturaCreateForm}">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+          <div class="form-grid">
+            <div class="form-field">
+              <div class="label">Usuario</div>
+              <select th:field="*{usuarioId}">
+                <option value="">Selecciona usuario…</option>
+                <option th:each="u : ${usuarios}" th:value="${u.id}" th:text="${u.email}">user</option>
+              </select>
+              <div class="field-error" th:if="${#fields.hasErrors('usuarioId')}" th:errors="*{usuarioId}">Error</div>
+            </div>
+            <div class="form-field">
+              <div class="label">Nombre</div>
+              <input type="text" th:field="*{nombre}" placeholder="Nombre de la asignatura" />
+              <div class="field-error" th:if="${#fields.hasErrors('nombre')}" th:errors="*{nombre}">Error</div>
+            </div>
+            <div class="form-field">
+              <div class="label">Color (opcional)</div>
+              <input type="text" th:field="*{colorHex}" placeholder="#0071e3" />
+              <div class="field-error" th:if="${#fields.hasErrors('colorHex')}" th:errors="*{colorHex}">Error</div>
+            </div>
+            <div class="form-field">
+              <div class="label">Trimestre (0-3)</div>
+              <input type="number" th:field="*{trimestre}" placeholder="Ej: 1" min="0" max="3" />
+              <div class="field-error" th:if="${#fields.hasErrors('trimestre')}" th:errors="*{trimestre}">Error</div>
+            </div>
+            <div class="form-field" style="grid-column: 1 / -1;">
+              <div class="label">Descripción (opcional)</div>
+              <textarea th:field="*{descripcion}" placeholder="Descripción"></textarea>
+              <div class="field-error" th:if="${#fields.hasErrors('descripcion')}" th:errors="*{descripcion}">Error</div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn">Crear</button>
+          </div>
+        </form>
+      </div>
+
       <div th:if="${detalleAsignatura}" class="card detail">
         <div class="detail-head">
           <div>

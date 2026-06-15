@@ -15,6 +15,7 @@ public class AuthResponseDTO {
   private String tokenType;
   private Long usuarioId;
   private String email;
+  private String nivelEstudio;
   private Set<String> roles;
 }
 

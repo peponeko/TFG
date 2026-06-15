@@ -2,10 +2,66 @@
   const STORAGE_KEY = "easy4you.auth";
   const TOKEN_COOKIE = "easy4you_token";
   const NIVEL_ESTUDIO_KEY = "easy4you.nivel_estudio";
+  const NIVEL_ESTUDIO_OPCIONES = [
+    { value: "universitario", label: "Estudiante universitario" },
+    { value: "ciclo-superior", label: "Ciclo superior" },
+    { value: "ciclo-medio", label: "Ciclo medio" },
+    { value: "eso-bachillerato", label: "ESO o Bachillerato" },
+    { value: "primaria", label: "Primaria" },
+    { value: "no-estudiante", label: "No estudiante" },
+  ];
 
-  function nivelEstudioKey() {
-    const userId = getAuth()?.userId;
-    return userId ? `${NIVEL_ESTUDIO_KEY}.${userId}` : NIVEL_ESTUDIO_KEY;
+  function getAuthIdentity(auth = getAuth()) {
+    if (!auth) return null;
+
+    const directIdentity = auth?.userId ?? auth?.usuarioId ?? auth?.email ?? null;
+    if (directIdentity != null && String(directIdentity).trim()) {
+      return String(directIdentity).trim().toLowerCase();
+    }
+
+    const token = auth?.token;
+    if (!token) return null;
+
+    try {
+      const parts = token.split(".");
+      if (parts.length < 2) return null;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+      const subject = payload?.sub;
+      return subject ? String(subject).trim().toLowerCase() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function nivelEstudioKey(auth = getAuth()) {
+    const identity = getAuthIdentity(auth);
+    return identity ? `${NIVEL_ESTUDIO_KEY}.${identity}` : NIVEL_ESTUDIO_KEY;
+  }
+
+  function normalizeNivelEstudio(value) {
+    return value ? String(value).trim().toLowerCase() : null;
+  }
+
+  function isNivelEstudioValido(value) {
+    const nivel = normalizeNivelEstudio(value);
+    return !!nivel && NIVEL_ESTUDIO_OPCIONES.some((opcion) => opcion.value === nivel);
+  }
+
+  function renderNivelEstudioOpciones() {
+    return NIVEL_ESTUDIO_OPCIONES.map(
+      (opcion) =>
+        `<button class="apple-btn-secondary nivel-opt" data-nivel="${opcion.value}">${opcion.label}</button>`
+    ).join("");
+  }
+
+  function guardarNivelEstudioLocal(nivel, auth = getAuth()) {
+    const normalized = normalizeNivelEstudio(nivel);
+    if (!normalized) return;
+
+    localStorage.setItem(nivelEstudioKey(auth), normalized);
+    if (auth) {
+      setAuth({ ...auth, nivelEstudio: normalized });
+    }
   }
 
   function getAuth() {
@@ -56,6 +112,15 @@
     return document.getElementById(id);
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
   function toast(message, variant = "info") {
     const root = qs("toast-root");
     if (!root) return;
@@ -79,7 +144,7 @@
     }, 3400);
   }
 
-  function openModal(title, bodyHtml) {
+  function openModal(title, bodyHtml, { closable = true } = {}) {
     const root = qs("modal-root");
     if (!root) return () => {};
 
@@ -87,9 +152,9 @@
     root.innerHTML = `
       <div class="apple-modal-overlay">
         <div class="apple-modal" style="max-width: 520px;">
-          <div class="flex items-center justify-between gap-3" style="border-bottom:1px solid var(--apple-separator); padding-bottom:12px;">
+          <div class="flex items-center ${closable ? "justify-between gap-3" : "justify-start"}" style="border-bottom:1px solid var(--apple-separator); padding-bottom:12px;">
             <h2 class="text-sm font-semibold" style="color: var(--apple-text);">${title}</h2>
-            <button id="e4y-modal-close" class="apple-btn-secondary" style="padding:8px 10px; font-size:12px;">Cerrar</button>
+            ${closable ? '<button id="e4y-modal-close" class="apple-btn-secondary" style="padding:8px 10px; font-size:12px;">Cerrar</button>' : ""}
           </div>
           <div style="padding-top:14px;">${bodyHtml}</div>
         </div>
@@ -101,11 +166,13 @@
       root.classList.add("hidden");
     };
 
-    const closeBtn = qs("e4y-modal-close");
-    if (closeBtn) closeBtn.addEventListener("click", close);
-    root.querySelector(".apple-modal-overlay")?.addEventListener("click", (event) => {
-      if (event.target === event.currentTarget) close();
-    });
+    if (closable) {
+      const closeBtn = qs("e4y-modal-close");
+      if (closeBtn) closeBtn.addEventListener("click", close);
+      root.querySelector(".apple-modal-overlay")?.addEventListener("click", (event) => {
+        if (event.target === event.currentTarget) close();
+      });
+    }
 
     return close;
   }
@@ -169,8 +236,23 @@
     return headers;
   }
 
-  async function apiFetch(path, { method = "GET", body, headers = {}, raw = false } = {}) {
-    const init = { method, headers: buildApiHeaders(headers) };
+  /** Jackson puede devolver el enum como string u objeto ({ name, ordinal }); unificamos aquí para UI y polling. */
+  function estadoUiString(estado) {
+    if (estado == null) return "";
+    if (typeof estado === "string") return estado;
+    if (typeof estado === "object") {
+      if (typeof estado.name === "string") return estado.name;
+      if (typeof estado.enumString === "string") return estado.enumString;
+      if (typeof estado.value === "string") return estado.value;
+    }
+    return String(estado);
+  }
+
+  async function apiFetch(path, { method = "GET", body, headers = {}, raw = false, timeoutMs = 55000 } = {}) {
+    const ctrl = new AbortController();
+    const tid = typeof timeoutMs === "number" && timeoutMs > 0 ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+
+    const init = { method, headers: buildApiHeaders(headers), signal: ctrl.signal };
 
     if (body instanceof FormData) {
       init.body = body;
@@ -179,7 +261,20 @@
       init.body = JSON.stringify(body);
     }
 
-    const res = await fetch(path, init);
+    let res;
+    try {
+      res = await fetch(path, init);
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const timeoutErr = new Error("Tiempo de espera agotado al contactar el servidor.");
+        timeoutErr.status = 0;
+        timeoutErr.code = "TIMEOUT";
+        throw timeoutErr;
+      }
+      throw err;
+    } finally {
+      if (tid) clearTimeout(tid);
+    }
     if (res.status === 401) {
       clearAuth();
       window.location.href = "/app/login?expired=1";
@@ -219,7 +314,7 @@
   }
 
   function estadoBadgeClass(estado) {
-    const e = (estado || "").toUpperCase();
+    const e = estadoUiString(estado).toUpperCase();
     if (e === "PROCESANDO") return "apple-chip apple-badge-processing";
     if (e === "PROCESADO" || e === "LISTO") return "apple-chip apple-badge-done";
     if (e === "ERROR") return "apple-chip apple-badge-error";
@@ -227,12 +322,21 @@
   }
 
   async function pollDocumentoEstado(documentoId, onDone, onError) {
+    let sawProcessing = false;
     for (let i = 0; i < 60; i++) {
       try {
         const estado = await apiFetch(`/api/documentos/${documentoId}/estado`);
-        const actual = (estado?.estadoProcesado || "").toUpperCase();
-        if (actual === "LISTO" || actual === "PROCESADO") return onDone?.(estado);
-        if (actual === "ERROR") return onError?.(estado?.error || "Error procesando el documento");
+        const actual = estadoUiString(estado?.estadoProcesado).toUpperCase();
+        if (actual === "PROCESANDO") sawProcessing = true;
+        if (sawProcessing && actual === "LISTO") return onDone?.(estado);
+        if (sawProcessing && actual === "PROCESADO") {
+          return onError?.(
+            "No se pudo generar el contenido con la IA. Comprueba OPENAI_API_KEY, que el documento tenga tema asignado y vuelve a intentarlo."
+          );
+        }
+        if (actual === "ERROR") {
+          return onError?.(estado?.errorExtraccion || "Error procesando el documento");
+        }
       } catch (err) {
         return onError?.(err.message || "No se pudo consultar el estado del documento");
       }
@@ -249,7 +353,7 @@
   });
 
   function fmtEstadoDocumento(estado) {
-    const e = (estado || "").toUpperCase();
+    const e = estadoUiString(estado).toUpperCase();
     if (e === "PROCESADO" || e === "LISTO") return { label: "Procesado", cls: "apple-chip apple-badge-done" };
     if (e === "PROCESANDO") return { label: "Procesando", cls: "apple-chip apple-badge-processing" };
     if (e === "ERROR") return { label: "Error", cls: "apple-chip apple-badge-error" };
@@ -270,8 +374,10 @@
   }
 
   function getNivelEstudio() {
-    const raw = localStorage.getItem(nivelEstudioKey());
-    return raw ? String(raw).trim().toLowerCase() : null;
+    const auth = getAuth();
+    const raw = localStorage.getItem(nivelEstudioKey(auth)) ?? auth?.nivelEstudio ?? null;
+    const normalized = normalizeNivelEstudio(raw);
+    return isNivelEstudioValido(normalized) ? normalized : null;
   }
 
   function isUniversitario() {
@@ -296,9 +402,31 @@
     return 0;
   }
 
+  async function persistirNivelEstudio(nivel) {
+    const normalized = normalizeNivelEstudio(nivel);
+    if (!isNivelEstudioValido(normalized)) {
+      throw new Error("Selecciona un nivel académico válido.");
+    }
+
+    const auth = getAuth();
+
+    await apiFetch("/api/auth/nivel-estudio", {
+      method: "PUT",
+      body: { nivelEstudio: normalized },
+    });
+
+    if (!getToken()) return normalized;
+
+    guardarNivelEstudioLocal(normalized, auth);
+    return normalized;
+  }
+
   async function ensureNivelEstudioSeleccionado() {
     const existente = getNivelEstudio();
-    if (existente) return existente;
+    if (existente) {
+      guardarNivelEstudioLocal(existente);
+      return existente;
+    }
 
     return await new Promise((resolve) => {
       const close = openModal(
@@ -306,21 +434,23 @@
         `
         <div style="display:flex; flex-direction:column; gap:10px;">
           <p style="margin:0; color: var(--apple-text-secondary);">¿Cuál es tu nivel educativo?</p>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="universitario">Estudiante universitario</button>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="ciclo-superior">Ciclo superior</button>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="ciclo-medio">Ciclo medio</button>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="eso-bachillerato">ESO o Bachillerato</button>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="primaria">Primaria</button>
-          <button class="apple-btn-secondary nivel-opt" data-nivel="no-estudiante">No estudiante</button>
+          ${renderNivelEstudioOpciones()}
         </div>
-      `
+      `,
+        { closable: false }
       );
       Array.from(document.querySelectorAll(".nivel-opt")).forEach((btn) => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           const nivel = btn.dataset.nivel;
-          localStorage.setItem(nivelEstudioKey(), nivel);
-          close();
-          resolve(nivel);
+          btn.disabled = true;
+          try {
+            const guardado = await persistirNivelEstudio(nivel);
+            close();
+            resolve(guardado);
+          } catch (err) {
+            btn.disabled = false;
+            toast(err.message || "No se pudo guardar el nivel académico", "error");
+          }
         });
       });
     });
@@ -354,7 +484,16 @@
 
         try {
           const res = await apiFetch("/api/auth/login", { method: "POST", body: { email, password } });
-          setAuth({ token: res.token, type: res.type, userId: res.userId, email: res.email, roles: res.roles });
+          setAuth({
+            token: res.token,
+            tokenType: res.tokenType ?? res.type,
+            type: res.tokenType ?? res.type,
+            userId: res.usuarioId ?? res.userId,
+            usuarioId: res.usuarioId ?? res.userId,
+            email: res.email,
+            nivelEstudio: res.nivelEstudio ?? null,
+            roles: res.roles,
+          });
           toast("Login correcto", "success");
           window.location.href = "/app/home";
         } catch (err) {
@@ -410,7 +549,7 @@
         } else {
           notebooks.forEach((nb) => {
             const a = document.createElement("a");
-            a.href = `/app/notebooks/${nb.id}`;
+            a.href = "/app/home";
             a.className = "apple-card";
             a.style.padding = "18px";
             a.style.border = "1px solid var(--apple-separator)";
@@ -432,7 +571,7 @@
             const meta = document.createElement("p");
             meta.className = "mt-4 text-xs";
             meta.style.color = "var(--apple-text-secondary)";
-            meta.textContent = "Abrir notebook →";
+            meta.textContent = "Ir a inicio →";
 
             a.appendChild(badge);
             a.appendChild(title);
@@ -519,7 +658,7 @@
           });
           close();
           toast("Notebook creado", "success");
-          window.location.href = `/app/notebooks/${created.id}`;
+          window.location.href = "/app/home";
         } catch (err) {
           toast(err.message || "No se pudo crear el notebook", "error");
         }
@@ -576,7 +715,6 @@
     const startFlashcards = qs("start-flashcards");
     const startTest = qs("start-test");
     const notesList = qs("notes-list");
-    const progressBox = qs("progress-box");
 
     let currentDocs = [];
     let currentDocId = null;
@@ -841,7 +979,7 @@
       const wrap = document.createElement("div");
       wrap.className = "apple-msg assistant";
       wrap.id = "chat-typing-indicator";
-      wrap.innerHTML = `<div class="apple-bubble" style="color: var(--apple-text-secondary);">IA escribiendo<span class="typing-dots"></span></div>`;
+      wrap.innerHTML = `<div class="apple-bubble" style="color: var(--apple-text-secondary);">Escribiendo<span class="typing-dots"></span></div>`;
       chatMessages.appendChild(wrap);
       chatMessages.scrollTop = chatMessages.scrollHeight;
       return wrap;
@@ -856,7 +994,7 @@
       bubble.style.background = "#fff1f3";
       bubble.style.borderColor = "#ffc4cb";
       bubble.style.color = "#8b1e2d";
-      bubble.textContent = message || "No se pudo obtener respuesta de la IA";
+      bubble.textContent = message || "No se pudo obtener respuesta del servicio";
       wrap.appendChild(bubble);
       chatMessages.appendChild(wrap);
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1035,7 +1173,7 @@
           if (res?.assistantMessage) renderChatMessage(res.assistantMessage, res.assistantMessage.fuentes);
         } catch (err) {
           typing?.remove();
-          renderInlineChatError(err.message || "La IA no está disponible en este momento.");
+          renderInlineChatError(err.message || "El servicio no está disponible en este momento.");
         }
       } catch (err) {
         toast(err.message || "Error enviando mensaje", "error");
@@ -1053,7 +1191,7 @@
           docStatus.innerHTML = "";
           const estadoEl = document.createElement("span");
           estadoEl.className = estadoBadgeClass(doc.estadoProcesado);
-          estadoEl.textContent = (doc.estadoProcesado || "PENDIENTE").toUpperCase();
+          estadoEl.textContent = (estadoUiString(doc.estadoProcesado) || "PENDIENTE").toUpperCase();
           const txt = document.createElement("span");
           txt.style.marginLeft = "8px";
           txt.style.fontSize = "12px";
@@ -1130,7 +1268,7 @@
       if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent || "";
       btn.disabled = !!loading;
       if (loading) {
-        btn.innerHTML = `<span class="inline-flex items-center gap-2"><svg class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"></circle><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" stroke-width="3"></path></svg>Generando con IA...</span>`;
+        btn.innerHTML = `<span class="inline-flex items-center gap-2"><svg class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"></circle><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" stroke-width="3"></path></svg>Generando...</span>`;
       } else {
         btn.textContent = btn.dataset.originalText;
       }
@@ -1158,7 +1296,7 @@
             setGeneratingState(button, false);
           },
           async (msg) => {
-            toast(msg || "Error generando con IA", "error");
+            toast(msg || "Error generando contenido", "error");
             await loadDocumentoDetalle(documentoId);
             setGeneratingState(button, false);
           }
@@ -1169,27 +1307,9 @@
       }
     }
 
-    async function loadProgress() {
-      try {
-        const p = await apiFetch("/api/progreso/usuario");
-        if (!progressBox) return;
-        progressBox.innerHTML = "";
-        const row1 = document.createElement("p");
-        row1.textContent = `Flashcards repasadas: ${p.flashcardsRepasadas ?? 0}`;
-        const row2 = document.createElement("p");
-        row2.className = "mt-1";
-        row2.textContent = `Tests completados: ${p.testsCompletados ?? 0}`;
-        progressBox.appendChild(row1);
-        progressBox.appendChild(row2);
-      } catch {
-        // optional
-      }
-    }
-
     try {
       await refreshOverview();
       await loadConversaciones();
-      await loadProgress();
     } catch (err) {
       toast(err.message || "Error cargando notebook", "error");
     }
@@ -1222,6 +1342,8 @@
     let temas = [];
     let docs = [];
     let pollTimer = null;
+    /** Evita carreras entre varias peticiones paralelas (Actualizar + polling). */
+    let docsFetchSeq = 0;
 
     function fmtBytes(bytes) {
       const n = Number(bytes);
@@ -1474,7 +1596,7 @@
 
     function hayProcesando() {
       return docs.some((d) => {
-        const e = (d.estadoProcesado || "").toUpperCase();
+        const e = estadoUiString(d.estadoProcesado).toUpperCase();
         return e === "PROCESANDO" || e === "PENDIENTE";
       });
     }
@@ -1486,12 +1608,13 @@
       }
       if (!hayProcesando()) return;
       pollTimer = setTimeout(async () => {
+        pollTimer = null;
         try {
           await refreshDocs(true);
         } catch {
-          // se reintentará
+          // refreshDocs atrapa errores y replanifica el poll dentro de sí misma si hace falta
         }
-      }, 4000);
+      }, 8000);
     }
 
     async function refreshTemas() {
@@ -1506,11 +1629,24 @@
     }
 
     async function refreshDocs(silencioso = false) {
+      const seq = ++docsFetchSeq;
       try {
         const lista = await apiFetch(`/api/documentos?asignaturaId=${notebookId}`);
+        if (seq !== docsFetchSeq) {
+          schedulePolling();
+          return;
+        }
         docs = Array.isArray(lista) ? lista : [];
-        docs.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        docs.sort((a, b) => {
+          const da = a.createdAt != null ? String(a.createdAt) : "";
+          const db = b.createdAt != null ? String(b.createdAt) : "";
+          return db.localeCompare(da);
+        });
       } catch (err) {
+        if (seq !== docsFetchSeq) {
+          schedulePolling();
+          return;
+        }
         if (!silencioso) toast(err.message || "No se pudieron cargar documentos", "error");
         docs = [];
       }
@@ -1608,7 +1744,6 @@
     });
 
     await Promise.all([refreshTitulo(), refreshTemas(), refreshDocs()]);
-    renderDocs();
   }
 
   async function initChatPage() {
@@ -1820,10 +1955,27 @@
     knownBtn?.addEventListener("click", async () => {
       if (!flashcards.length) return;
       const fc = flashcards[idx];
+      if (knownBtn) {
+        knownBtn.disabled = true;
+        knownBtn.dataset.originalText = knownBtn.dataset.originalText || knownBtn.textContent;
+        knownBtn.textContent = "✓ Guardado";
+        knownBtn.style.background = "#eafaf1";
+        knownBtn.style.borderColor = "#b9e7cf";
+        knownBtn.style.color = "#0f5132";
+      }
       try {
         await apiFetch(`/api/flashcards/${fc.id}/repasar`, { method: "POST" });
       } catch {
         // optional
+      }
+      if (knownBtn) {
+        setTimeout(() => {
+          knownBtn.disabled = false;
+          knownBtn.textContent = knownBtn.dataset.originalText || "Marcar como repasada";
+          knownBtn.style.background = "";
+          knownBtn.style.borderColor = "";
+          knownBtn.style.color = "";
+        }, 520);
       }
       next();
     });
@@ -2331,20 +2483,23 @@
     const btnAddFirstTema = qs("btn-add-first-tema");
     let temas = [];
     let temasFiltrados = [];
+    let unidades = [];
 
     function nombreTrimestre(t) {
       return etiquetaPeriodo(t);
     }
 
-    function renderTemas() {
-      if (!list) return;
-      list.innerHTML = "";
-      if (!temasFiltrados.length) {
-        empty.style.display = "block";
-        return;
-      }
-      empty.style.display = "none";
-      temasFiltrados.forEach((t) => {
+    function unidadTituloPorId(id) {
+      if (id == null) return null;
+      const u = unidades.find((x) => Number(x.id) === Number(id));
+      if (!u) return `Unidad #${id}`;
+      const ord = u.orden != null ? `Unidad ${u.orden}` : "Unidad";
+      const label = `${ord}: ${u.titulo || ""}`.trim();
+      return label.endsWith(":") ? ord : label;
+    }
+
+    function renderTemasList(items, parentEl) {
+      items.forEach((t) => {
         const row = document.createElement("div");
         row.className = "tema-row";
         row.innerHTML = `
@@ -2375,8 +2530,77 @@
         row.addEventListener("click", () => {
           window.location.href = `/app/notebooks/${asignaturaId}?temaId=${t.id}`;
         });
-        list.appendChild(row);
+        parentEl.appendChild(row);
       });
+    }
+
+    function renderTemas() {
+      if (!list) return;
+      list.innerHTML = "";
+      if (!temasFiltrados.length) {
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      if (!Array.isArray(unidades) || !unidades.length) {
+        renderTemasList(temasFiltrados, list);
+        return;
+      }
+
+      const byUnidad = new Map();
+      temasFiltrados.forEach((t) => {
+        const k = t.unidadTematicaId ?? null;
+        if (!byUnidad.has(k)) byUnidad.set(k, []);
+        byUnidad.get(k).push(t);
+      });
+
+      const unidadesOrdenadas = [...unidades].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+      unidadesOrdenadas.forEach((u) => {
+        const items = byUnidad.get(u.id) || [];
+        if (!items.length) return;
+
+        const box = document.createElement("div");
+        box.className = "apple-panel";
+        box.style.padding = "12px 14px";
+        box.style.marginBottom = "12px";
+
+        const h = document.createElement("p");
+        h.style.fontSize = "12px";
+        h.style.fontWeight = "700";
+        h.style.color = "var(--apple-text-secondary)";
+        h.textContent = unidadTituloPorId(u.id);
+        box.appendChild(h);
+
+        const inner = document.createElement("div");
+        inner.style.marginTop = "10px";
+        box.appendChild(inner);
+        renderTemasList(items, inner);
+
+        list.appendChild(box);
+      });
+
+      const sinUnidad = byUnidad.get(null) || [];
+      if (sinUnidad.length) {
+        const box = document.createElement("div");
+        box.className = "apple-panel";
+        box.style.padding = "12px 14px";
+        box.style.marginBottom = "12px";
+
+        const h = document.createElement("p");
+        h.style.fontSize = "12px";
+        h.style.fontWeight = "700";
+        h.style.color = "var(--apple-text-secondary)";
+        h.textContent = "Sin unidad";
+        box.appendChild(h);
+
+        const inner = document.createElement("div");
+        inner.style.marginTop = "10px";
+        box.appendChild(inner);
+        renderTemasList(sinUnidad, inner);
+
+        list.appendChild(box);
+      }
     }
 
     function filtrar(query = "") {
@@ -2404,6 +2628,15 @@
 
     function openCrearTemaModal() {
       toggleFabMenu(false);
+      const opcionesUnidad =
+        Array.isArray(unidades) && unidades.length
+          ? `<option value="">Sin unidad</option>` +
+            unidades
+              .slice()
+              .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+              .map((u) => `<option value="${u.id}">${truncate(unidadTituloPorId(u.id), 70)}</option>`)
+              .join("")
+          : `<option value="">Sin unidad</option>`;
       const close = openModal(
         "Nuevo tema",
         `
@@ -2411,6 +2644,7 @@
           <input id="nt-titulo" class="apple-input" placeholder="Título" required />
           <textarea id="nt-desc" class="apple-input" rows="3" placeholder="Descripción (opcional)"></textarea>
           <input id="nt-tags" class="apple-input" placeholder="Palabras clave separadas por coma" />
+          <select id="nt-unidad" class="apple-input">${opcionesUnidad}</select>
           <button class="apple-btn-primary w-full" type="submit">Guardar tema</button>
         </form>
       `
@@ -2418,11 +2652,13 @@
       qs("form-crear-tema")?.addEventListener("submit", async (e) => {
         e.preventDefault();
         try {
+          const unidadTematicaId = Number(qs("nt-unidad")?.value) || null;
           const nuevo = await apiFetch("/api/temas/rapido", {
             method: "POST",
             body: {
               asignaturaId,
               trimestre,
+              unidadTematicaId,
               titulo: qs("nt-titulo")?.value?.trim(),
               descripcion: qs("nt-desc")?.value?.trim() || null,
               palabrasClave: qs("nt-tags")?.value?.trim() || null,
@@ -2433,6 +2669,7 @@
           temas.unshift({
             ...nuevo,
             trimestre: trimestre === 0 ? null : trimestre,
+            unidadTematicaId,
             documentosCount: 0,
             flashcardsCount: 0,
             preguntasCount: 0,
@@ -2490,6 +2727,12 @@
 
       const temasPlanos = await apiFetch(`/api/asignaturas/${asignaturaId}/temas-planos`);
       temas = Array.isArray(temasPlanos) ? temasPlanos : [];
+      try {
+        const listUnidades = await apiFetch(`/api/unidades-tematicas?asignaturaId=${asignaturaId}`);
+        unidades = Array.isArray(listUnidades) ? listUnidades : [];
+      } catch {
+        unidades = [];
+      }
       filtrar("");
     } catch (err) {
       toast(err.message || "No se pudieron cargar temas", "error");
@@ -2500,14 +2743,444 @@
     fabNewTema?.addEventListener("click", openCrearTemaModal);
     btnAddFirstTema?.addEventListener("click", openCrearTemaModal);
     fabUploadDoc?.addEventListener("click", openSubirDocumentoModal);
-    fabNewUnidad?.addEventListener("click", () => {
+    function openCrearUnidadModal() {
       toggleFabMenu(false);
-      toast("La creación de unidades se añadirá en una siguiente iteración.", "info");
-    });
+      const close = openModal(
+        "Nueva unidad",
+        `
+        <form id="form-crear-unidad" class="space-y-3">
+          <input id="un-titulo" class="apple-input" placeholder="Ej: Introducción" maxlength="200" required />
+          <input id="un-orden" class="apple-input" type="number" placeholder="Orden (ej: 1)" />
+          <input id="un-trimestre" class="apple-input" type="number" placeholder="Trimestre (opcional)" />
+          <button class="apple-btn-primary w-full" type="submit">Crear unidad</button>
+        </form>
+      `
+      );
+
+      qs("form-crear-unidad")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const titulo = qs("un-titulo")?.value?.trim();
+        if (!titulo) return;
+        const orden = Number(qs("un-orden")?.value);
+        const tri = Number(qs("un-trimestre")?.value);
+        try {
+          const created = await apiFetch("/api/unidades-tematicas", {
+            method: "POST",
+            body: {
+              asignaturaId,
+              titulo,
+              orden: Number.isFinite(orden) && orden > 0 ? orden : 0,
+              trimestre: Number.isFinite(tri) && tri > 0 ? tri : null,
+            },
+          });
+          close();
+          toast("Unidad creada", "success");
+          unidades.push(created);
+          filtrar(search?.value || "");
+        } catch (err) {
+          toast(err.message || "No se pudo crear la unidad", "error");
+        }
+      });
+    }
+
+    fabNewUnidad?.addEventListener("click", openCrearUnidadModal);
     document.addEventListener("click", (e) => {
       if (!fabMenu) return;
       if (!fabMenu.contains(e.target) && fabMenu.dataset.open === "true") {
         toggleFabMenu(false);
+      }
+    });
+  }
+
+  function tipoEventoUi(tipo) {
+    const t = String(tipo || "OTRO").toUpperCase();
+    if (t === "EXAMEN") return { label: "Examen", color: "#2563eb" };
+    if (t === "ENTREGA") return { label: "Entrega", color: "#7c3aed" };
+    if (t === "RECUPERACION") return { label: "Recuperación", color: "#d97706" };
+    if (t === "SESION_ESTUDIO") return { label: "Sesión estudio", color: "#059669" };
+    return { label: "Otro", color: "#6b7280" };
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function fmtIsoDate(d) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function parseIsoDateToLocal(iso) {
+    if (!iso) return null;
+    const parts = String(iso).split("-");
+    if (parts.length !== 3) return null;
+    const y = Number(parts[0]);
+    const m = Number(parts[1]);
+    const d = Number(parts[2]);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    return new Date(y, m - 1, d);
+  }
+
+  function monthTitle(year, month0) {
+    const dt = new Date(year, month0, 1);
+    return dt.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  }
+
+  function startOfCalendarGrid(year, month0) {
+    const first = new Date(year, month0, 1);
+    const dow = (first.getDay() + 6) % 7; // Monday=0 ... Sunday=6
+    const start = new Date(year, month0, 1 - dow);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  function endOfCalendarGrid(start) {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 41);
+    end.setHours(0, 0, 0, 0);
+    return end;
+  }
+
+  function buildAsignaturaSelectHtml(asignaturas, selectedId) {
+    const items = Array.isArray(asignaturas) ? asignaturas : [];
+    const selectedValue = selectedId != null && selectedId !== "" ? String(selectedId) : "";
+    const options = ['<option value="">Sin asignatura</option>'];
+    let foundSelected = false;
+
+    items.forEach((asignatura) => {
+      const id = asignatura?.id != null ? String(asignatura.id) : "";
+      if (!id) return;
+      if (id === selectedValue) foundSelected = true;
+      const name = asignatura?.nombre || `Asignatura ${id}`;
+      options.push(
+        `<option value="${escapeHtml(id)}"${id === selectedValue ? " selected" : ""}>${escapeHtml(name)}</option>`
+      );
+    });
+
+    if (selectedValue && !foundSelected) {
+      options.push(
+        `<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(`Asignatura #${selectedValue} (actual)`)}</option>`
+      );
+    }
+
+    return options.join("");
+  }
+
+  function openEventoFormModal({ title, initial, onSubmit, asignaturas = [] }) {
+    const safe = initial || {};
+    const close = openModal(
+      title,
+      `
+      <form id="evento-form" style="display:flex; flex-direction:column; gap:10px;">
+        <div>
+          <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Título</label>
+          <input id="ev-titulo" class="apple-input" maxlength="200" required value="${escapeHtml(safe.titulo || "")}" />
+        </div>
+        <div>
+          <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Descripción (opcional)</label>
+          <textarea id="ev-descripcion" class="apple-input" rows="3" placeholder="Opcional">${escapeHtml(safe.descripcion || "")}</textarea>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Fecha</label>
+            <input id="ev-fecha" class="apple-input" type="date" required value="${escapeHtml(safe.fechaInicio || "")}" />
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Hora (opcional)</label>
+            <input id="ev-hora" class="apple-input" type="time" value="${escapeHtml(safe.horaInicio || "")}" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Tipo</label>
+            <select id="ev-tipo" class="apple-input" required>
+              ${["EXAMEN","ENTREGA","RECUPERACION","SESION_ESTUDIO","OTRO"].map((t) => {
+                const sel = String(safe.tipo || "OTRO").toUpperCase() === t ? "selected" : "";
+                return `<option value="${t}" ${sel}>${tipoEventoUi(t).label}</option>`;
+              }).join("")}
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; color:var(--apple-text-secondary); margin-bottom:4px;">Asignatura (opcional)</label>
+            <select id="ev-asig" class="apple-input">
+              ${buildAsignaturaSelectHtml(asignaturas, safe.asignaturaId)}
+            </select>
+            <p style="margin:4px 0 0; font-size:12px; color:var(--apple-text-secondary);">Déjalo vacío si solo quieres guardar la fecha.</p>
+          </div>
+        </div>
+        <button type="submit" class="apple-btn-primary">Guardar</button>
+      </form>
+    `
+    );
+
+    const form = qs("evento-form");
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const titulo = qs("ev-titulo")?.value?.trim();
+      const descripcion = qs("ev-descripcion")?.value?.trim() || null;
+      const fechaInicio = qs("ev-fecha")?.value;
+      const horaInicio = qs("ev-hora")?.value || null;
+      const tipo = qs("ev-tipo")?.value;
+      const asignaturaValue = qs("ev-asig")?.value;
+      const asignaturaId = asignaturaValue ? Number(asignaturaValue) || null : null;
+      if (!titulo || !fechaInicio || !tipo) return;
+      try {
+        await onSubmit({ titulo, descripcion, fechaInicio, horaInicio, tipo, asignaturaId });
+        close();
+      } catch (err) {
+        toast(err.message || "No se pudo guardar el evento", "error");
+      }
+    });
+  }
+
+  function openEventoDetalleModal(evento, { onEdit, onDelete, onToggle }) {
+    const t = tipoEventoUi(evento?.tipo);
+    const close = openModal(
+      "Evento",
+      `
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="chip" style="background:${t.color}14; color:${t.color}; border-color:${t.color}33; width:max-content;">
+          <span class="t">${t.label}</span>
+        </div>
+        <p style="margin:0; font-weight:700; font-size:16px;">${escapeHtml(evento?.titulo || "—")}</p>
+        <p style="margin:0; color:var(--apple-text-secondary); font-size:13px;">
+          ${evento?.fechaInicio || "—"}${evento?.horaInicio ? ` · ${evento.horaInicio}` : ""}${evento?.asignaturaId ? ` · Asignatura #${evento.asignaturaId}` : ""}
+        </p>
+        ${evento?.descripcion ? `<p style="margin:0; font-size:13px; white-space:pre-wrap;">${escapeHtml(evento.descripcion)}</p>` : ""}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2" style="margin-top:8px;">
+          <button id="ev-btn-toggle" class="apple-btn-secondary">${evento?.completado ? "Marcar pendiente" : "Marcar completado"}</button>
+          <button id="ev-btn-edit" class="apple-btn-secondary">Editar</button>
+          <button id="ev-btn-del" class="apple-btn-secondary" style="border-color:#ef4444; color:#b91c1c;">Borrar</button>
+        </div>
+      </div>
+    `
+    );
+
+    qs("ev-btn-toggle")?.addEventListener("click", async () => {
+      try {
+        await onToggle?.();
+        close();
+      } catch (err) {
+        toast(err.message || "No se pudo actualizar", "error");
+      }
+    });
+    qs("ev-btn-edit")?.addEventListener("click", async () => {
+      close();
+      await onEdit?.();
+    });
+    qs("ev-btn-del")?.addEventListener("click", async () => {
+      if (!confirm("¿Borrar este evento?")) return;
+      try {
+        await onDelete?.();
+        close();
+      } catch (err) {
+        toast(err.message || "No se pudo borrar", "error");
+      }
+    });
+  }
+
+  async function initCalendarPage() {
+    requireAuth();
+    setupLogout();
+
+    const grid = qs("cal-grid");
+    const titleEl = qs("cal-title");
+    const prevBtn = qs("cal-prev");
+    const nextBtn = qs("cal-next");
+    const todayBtn = qs("cal-today");
+
+    let view = new Date();
+    view.setDate(1);
+    view.setHours(0, 0, 0, 0);
+
+    let eventosCache = [];
+    let asignaturas = [];
+
+    try {
+      asignaturas = await apiFetch("/api/asignaturas");
+      asignaturas = Array.isArray(asignaturas) ? asignaturas : [];
+    } catch {
+      asignaturas = [];
+    }
+
+    async function fetchEventosForCurrentMonth() {
+      const y = view.getFullYear();
+      const m0 = view.getMonth();
+      const start = startOfCalendarGrid(y, m0);
+      const end = endOfCalendarGrid(start);
+      const desde = fmtIsoDate(start);
+      const hasta = fmtIsoDate(end);
+      eventosCache = await apiFetch(`/api/eventos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+      eventosCache = Array.isArray(eventosCache) ? eventosCache : [];
+    }
+
+    function eventosPorDiaIso() {
+      const map = new Map();
+      eventosCache.forEach((e) => {
+        const k = e.fechaInicio;
+        if (!k) return;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(e);
+      });
+      for (const [k, list] of map.entries()) {
+        list.sort((a, b) => String(a.horaInicio || "").localeCompare(String(b.horaInicio || "")));
+        map.set(k, list);
+      }
+      return map;
+    }
+
+    function render() {
+      if (!grid) return;
+      const y = view.getFullYear();
+      const m0 = view.getMonth();
+      if (titleEl) titleEl.textContent = monthTitle(y, m0);
+
+      grid.innerHTML = "";
+      const start = startOfCalendarGrid(y, m0);
+      const map = eventosPorDiaIso();
+
+      for (let i = 0; i < 42; i += 1) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const iso = fmtIsoDate(d);
+        const isOut = d.getMonth() !== m0;
+
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = `day-cell ${isOut ? "is-out" : ""}`;
+        cell.style.textAlign = "left";
+        cell.addEventListener("click", () => {
+          openEventoFormModal({
+            title: `Nuevo evento · ${iso}`,
+            initial: { fechaInicio: iso, tipo: "OTRO" },
+            asignaturas,
+            onSubmit: async (payload) => {
+              await apiFetch("/api/eventos", { method: "POST", body: payload });
+              toast("Evento creado", "success");
+              await refresh();
+            },
+          });
+        });
+
+        const head = document.createElement("div");
+        head.className = "flex items-center justify-between";
+        const num = document.createElement("span");
+        num.className = "day-num";
+        num.textContent = String(d.getDate());
+        head.appendChild(num);
+
+        const listBox = document.createElement("div");
+        listBox.className = "mt-2 flex flex-col gap-1";
+
+        const list = map.get(iso) || [];
+        list.slice(0, 4).forEach((e) => {
+          const ui = tipoEventoUi(e.tipo);
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip";
+          chip.style.background = `${ui.color}14`;
+          chip.style.color = ui.color;
+          chip.style.borderColor = `${ui.color}33`;
+          chip.title = e.titulo || "Evento";
+          chip.innerHTML = `<span class="t">${e.completado ? "✓ " : ""}${truncate(e.titulo || "Evento", 44)}</span>`;
+          chip.addEventListener("click", async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openEventoDetalleModal(e, {
+              onToggle: async () => {
+                await apiFetch(`/api/eventos/${e.id}/completar`, { method: "PATCH" });
+                toast("Actualizado", "success");
+                await refresh();
+              },
+              onDelete: async () => {
+                await apiFetch(`/api/eventos/${e.id}`, { method: "DELETE" });
+                toast("Evento borrado", "success");
+                await refresh();
+              },
+              onEdit: async () => {
+                openEventoFormModal({
+                  title: "Editar evento",
+                  initial: e,
+                  asignaturas,
+                  onSubmit: async (payload) => {
+                    await apiFetch(`/api/eventos/${e.id}`, { method: "PUT", body: payload });
+                    toast("Evento actualizado", "success");
+                    await refresh();
+                  },
+                });
+              },
+            });
+          });
+          listBox.appendChild(chip);
+        });
+
+        if (list.length > 4) {
+          const more = document.createElement("p");
+          more.className = "text-[11px]";
+          more.style.color = "var(--apple-text-secondary)";
+          more.textContent = `+${list.length - 4} más`;
+          listBox.appendChild(more);
+        }
+
+        cell.appendChild(head);
+        cell.appendChild(listBox);
+        grid.appendChild(cell);
+      }
+    }
+
+    async function refresh() {
+      try {
+        await fetchEventosForCurrentMonth();
+      } catch (err) {
+        toast(err.message || "No se pudieron cargar eventos", "error");
+        eventosCache = [];
+      }
+      render();
+    }
+
+    prevBtn?.addEventListener("click", async () => {
+      view = new Date(view.getFullYear(), view.getMonth() - 1, 1);
+      await refresh();
+    });
+    nextBtn?.addEventListener("click", async () => {
+      view = new Date(view.getFullYear(), view.getMonth() + 1, 1);
+      await refresh();
+    });
+    todayBtn?.addEventListener("click", async () => {
+      const now = new Date();
+      view = new Date(now.getFullYear(), now.getMonth(), 1);
+      await refresh();
+    });
+
+    await refresh();
+  }
+
+  async function initPerfilPage() {
+    requireAuth();
+    setupLogout();
+
+    const form = qs("perfil-form");
+    const nombreEl = qs("perfil-nombre");
+    const apellidosEl = qs("perfil-apellidos");
+    const nivelEl = qs("perfil-nivel-estudio");
+
+    if (nivelEl) {
+      nivelEl.value = getNivelEstudio() || "";
+    }
+
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nombre = nombreEl?.value?.trim();
+      const apellidos = apellidosEl?.value?.trim() || null;
+      const nivelEstudio = nivelEl?.value?.trim() || null;
+      if (!nombre) return;
+      try {
+        await apiFetch("/api/auth/perfil", { method: "PUT", body: { nombre, apellidos } });
+        if (nivelEstudio) {
+          await persistirNivelEstudio(nivelEstudio);
+        }
+        toast("Perfil actualizado", "success");
+      } catch (err) {
+        toast(err.message || "No se pudo actualizar el perfil", "error");
       }
     });
   }
@@ -2543,6 +3216,8 @@
     if (page === "study-flashcards") return initStudyFlashcards();
     if (page === "study-test") return initStudyTest();
     if (page === "notes") return initNotes();
+    if (page === "calendar") return initCalendarPage();
+    if (page === "perfil") return initPerfilPage();
   }
 
   document.addEventListener("DOMContentLoaded", init);

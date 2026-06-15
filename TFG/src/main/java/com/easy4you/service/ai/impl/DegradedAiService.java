@@ -8,26 +8,26 @@ import org.springframework.stereotype.Service;
 
 @Service
 @ConditionalOnMissingBean(AiService.class)
-// Servicio de IA de emergencia: devuelve respuestas vacías si Ollama/Gemini no están disponibles
+// Implementación mínima cuando no hay proveedor configurado.
 public class DegradedAiService implements AiService {
 
   private static final Logger log = LoggerFactory.getLogger(DegradedAiService.class);
 
   @Override
   public String generarRespuesta(String prompt, int maxTokens) {
-    log.info("DegradedAiService activo: proveedor de IA no disponible");
+    log.debug("DegradedAiService activo: proveedor no disponible");
     return "";
   }
 
   @Override
   public String generarConContexto(String sistemaPrompt, String contexto, String pregunta, int maxTokens) {
-    log.info("DegradedAiService activo: proveedor de IA no disponible");
+    log.debug("DegradedAiService activo: proveedor no disponible");
     return "";
   }
 
   @Override
   public String generarJson(String prompt) {
-    log.info("DegradedAiService activo: proveedor de IA no disponible");
+    log.debug("DegradedAiService activo: proveedor no disponible");
     return "[]";
   }
 

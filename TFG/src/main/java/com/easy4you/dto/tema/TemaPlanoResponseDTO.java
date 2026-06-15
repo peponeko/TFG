@@ -5,6 +5,7 @@ public record TemaPlanoResponseDTO(
     String titulo,
     String descripcion,
     String palabrasClave,
+    Long unidadTematicaId,
     Integer trimestre,
     long documentosCount,
     long flashcardsCount,

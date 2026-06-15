@@ -27,7 +27,7 @@ public class DocumentoResponseDTO {
 
   /**
    * Vista previa (recortada) del texto extraído.
-   * Para demo DAM: la IA "lee" este texto.
+   * Se usa como vista previa para el usuario.
    */
   private String textoExtraidoPreview;
 

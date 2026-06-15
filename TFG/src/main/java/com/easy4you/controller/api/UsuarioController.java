@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/usuarios")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class UsuarioController {
 
   private final UsuarioService usuarioService;
@@ -35,7 +36,6 @@ public class UsuarioController {
   private final PasswordEncoder passwordEncoder;
 
   @GetMapping
-  @PreAuthorize("hasRole('ADMIN')")
   public ResponseEntity<List<UsuarioResponseDTO>> listar() {
     List<UsuarioResponseDTO> response =
         usuarioService.listar().stream().map(this::toResponse).toList();
@@ -114,6 +114,7 @@ public class UsuarioController {
         usuario.getNombre(),
         usuario.getApellidos(),
         usuario.getEmail(),
+        usuario.getNivelEstudio(),
         usuario.getImagenUrl(),
         usuario.isActivo(),
         usuario.isVerificado(),

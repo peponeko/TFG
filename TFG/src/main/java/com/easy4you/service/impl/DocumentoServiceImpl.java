@@ -6,6 +6,7 @@ import com.easy4you.dto.documento.DocumentoChunkResponseDTO;
 import com.easy4you.dto.documento.DocumentoChunksPageResponseDTO;
 import com.easy4you.dto.documento.DocumentoDetalleResponseDTO;
 import com.easy4you.dto.documento.DocumentoEstadoResponseDTO;
+import com.easy4you.dto.documento.DocumentoResponseDTO;
 import com.easy4you.dto.flashcard.FlashcardResponseDTO;
 import com.easy4you.dto.pregunta.PreguntaTestResponseDTO;
 import com.easy4you.dto.resumen.ResumenResponseDTO;
@@ -94,6 +95,41 @@ public class DocumentoServiceImpl implements DocumentoService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public List<DocumentoResponseDTO> listarItemsDto(Long usuarioActualId, Long temaId, Long asignaturaId) {
+    if (usuarioActualId == null) {
+      throw new BadRequestException("usuarioId es obligatorio");
+    }
+
+    List<Documento> documentos;
+    if (temaId != null) {
+      documentos =
+          documentoRepository.findByTemaIdFetchingRelations(temaId).stream()
+              .filter(d -> d.getUsuario() != null && usuarioActualId.equals(d.getUsuario().getId()))
+              .toList();
+    } else if (asignaturaId != null) {
+      if (asignaturaRepository.findByIdAndUsuarioId(asignaturaId, usuarioActualId).isEmpty()) {
+        throw new NotFoundException("Asignatura no encontrada: " + asignaturaId);
+      }
+      documentos =
+          documentoRepository.findByAsignaturaIdFetchingRelations(asignaturaId).stream()
+              .filter(d -> d.getUsuario() != null && usuarioActualId.equals(d.getUsuario().getId()))
+              .toList();
+    } else {
+      documentos = documentoRepository.findByUsuarioIdFetchingRelations(usuarioActualId);
+    }
+
+    return documentos.stream().map(DocumentoMapper::toListItem).toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public DocumentoResponseDTO obtenerResponsePorIdDeUsuario(Long usuarioId, Long documentoId) {
+    Documento d = obtenerPorIdDeUsuario(usuarioId, documentoId);
+    return DocumentoMapper.toResponse(d);
+  }
+
+  @Override
   public Documento crear(Documento documento) {
     return documentoRepository.save(documento);
   }
@@ -153,7 +189,12 @@ public class DocumentoServiceImpl implements DocumentoService {
     long preguntas = preguntaTestRepository.countByDocumentoId(documento.getId());
 
     return new DocumentoEstadoResponseDTO(
-        documento.getId(), documento.getEstadoProcesado(), resumenes, flashcards, preguntas);
+        documento.getId(),
+        documento.getEstadoProcesado(),
+        documento.getErrorExtraccion(),
+        resumenes,
+        flashcards,
+        preguntas);
   }
 
   @Override

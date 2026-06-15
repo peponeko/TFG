@@ -74,4 +74,14 @@ public class AppViewController {
   public String notas() {
     return "notas/index";
   }
+
+  @GetMapping("/calendario")
+  public String calendario() {
+    return "calendario/index";
+  }
+
+  @GetMapping("/perfil")
+  public String perfil() {
+    return "app/perfil";
+  }
 }

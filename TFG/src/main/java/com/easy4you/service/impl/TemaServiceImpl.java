@@ -6,8 +6,10 @@ import com.easy4you.exception.BadRequestException;
 import com.easy4you.exception.NotFoundException;
 import com.easy4you.model.entity.Asignatura;
 import com.easy4you.model.entity.Tema;
+import com.easy4you.model.entity.UnidadTematica;
 import com.easy4you.repository.AsignaturaRepository;
 import com.easy4you.repository.TemaRepository;
+import com.easy4you.repository.UnidadTematicaRepository;
 import com.easy4you.service.TemaService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class TemaServiceImpl implements TemaService {
 
   private final TemaRepository temaRepository;
   private final AsignaturaRepository asignaturaRepository;
+  private final UnidadTematicaRepository unidadTematicaRepository;
 
   @Override
   @Transactional(readOnly = true)
@@ -95,6 +98,7 @@ public class TemaServiceImpl implements TemaService {
     Tema tema = new Tema();
     Asignatura asignatura = resolveAsignaturaParaTema(usuarioId, request);
     tema.setAsignatura(asignatura);
+    tema.setUnidadTematica(resolveUnidadTematica(usuarioId, asignatura.getId(), request.getUnidadTematicaId()));
     tema.setTitulo(request.getTitulo());
     tema.setDescripcion(request.getDescripcion());
     tema.setOrden(request.getOrden() != null ? request.getOrden() : 0);
@@ -123,6 +127,7 @@ public class TemaServiceImpl implements TemaService {
 
     Tema tema = new Tema();
     tema.setAsignatura(asignatura);
+    tema.setUnidadTematica(resolveUnidadTematica(usuarioId, asignatura.getId(), request.getUnidadTematicaId()));
     tema.setTrimestre(trimestre == null || trimestre == 0 ? null : trimestre);
     tema.setTitulo(request.getTitulo());
     tema.setDescripcion(request.getDescripcion());
@@ -138,6 +143,8 @@ public class TemaServiceImpl implements TemaService {
 
     Tema datos = new Tema();
     datos.setAsignatura(existente.getAsignatura());
+    datos.setUnidadTematica(
+        resolveUnidadTematica(usuarioId, existente.getAsignatura().getId(), request.getUnidadTematicaId()));
     datos.setTrimestre(existente.getTrimestre());
     datos.setTitulo(request.getTitulo());
     datos.setDescripcion(request.getDescripcion());
@@ -165,5 +172,22 @@ public class TemaServiceImpl implements TemaService {
     return asignaturaRepository
         .findByIdAndUsuarioId(request.getAsignaturaId(), usuarioId)
         .orElseThrow(() -> new NotFoundException("Asignatura no encontrada: " + request.getAsignaturaId()));
+  }
+
+  private UnidadTematica resolveUnidadTematica(Long usuarioId, Long asignaturaId, Long unidadTematicaId) {
+    if (unidadTematicaId == null) {
+      return null;
+    }
+    UnidadTematica unidad =
+        unidadTematicaRepository
+            .findByIdAndAsignaturaUsuarioId(unidadTematicaId, usuarioId)
+            .orElseThrow(() -> new NotFoundException("Unidad temática no encontrada: " + unidadTematicaId));
+    if (unidad.getAsignatura() == null || unidad.getAsignatura().getId() == null) {
+      throw new BadRequestException("Unidad temática inválida");
+    }
+    if (!unidad.getAsignatura().getId().equals(asignaturaId)) {
+      throw new BadRequestException("La unidad temática no pertenece a la asignatura del tema");
+    }
+    return unidad;
   }
 }

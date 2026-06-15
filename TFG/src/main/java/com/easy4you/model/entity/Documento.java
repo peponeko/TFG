@@ -1,6 +1,7 @@
 package com.easy4you.model.entity;
 
 import com.easy4you.model.enums.EstadoProcesadoDocumento;
+import jakarta.persistence.Basic;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -71,6 +72,7 @@ public class Documento extends BaseAuditableEntity {
   private String checksumSha256;
 
   @Lob
+  @Basic(fetch = FetchType.LAZY)
   @Column(name = "extraido_texto", columnDefinition = "LONGTEXT")
   private String textoExtraido;
 
@@ -82,6 +84,7 @@ public class Documento extends BaseAuditableEntity {
   private EstadoProcesadoDocumento estadoProcesado = EstadoProcesadoDocumento.PENDIENTE;
 
   @Lob
+  @Basic(fetch = FetchType.LAZY)
   @Column(name = "error_procesado")
   private String errorExtraccion;
 

@@ -241,3 +241,43 @@ h1 {
   background: #fef2f2;
   color: #991b1b;
 }
+
+/* Formularios admin */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.form-field textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.form-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #991b1b;
+}

@@ -25,7 +25,7 @@ public interface TemaRepository extends JpaRepository<Tema, Long> {
 
   @Query(
       """
-      select t.id, t.titulo, t.descripcion, t.palabrasClave, t.trimestre
+      select t.id, t.titulo, t.descripcion, t.palabrasClave, t.unidadTematica.id, t.trimestre
       from Tema t
       where t.asignatura.id = :asignaturaId
       order by t.titulo asc, t.id asc

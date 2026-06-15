@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/asignaturas")
@@ -37,6 +38,7 @@ public class AsignaturaController {
   private final UsuarioService usuarioService;
   private final AuthenticatedUserService authenticatedUserService;
 
+  @Transactional(readOnly = true)
   @GetMapping
   public ResponseEntity<List<AsignaturaResponseDTO>> listar(
       @RequestParam(required = false) Long usuarioId, @RequestParam(required = false) Integer trimestre) {
@@ -62,6 +64,7 @@ public class AsignaturaController {
     return ResponseEntity.ok(response);
   }
 
+  @Transactional(readOnly = true)
   @GetMapping("/{id}")
   public ResponseEntity<AsignaturaResponseDTO> obtener(@PathVariable Long id) {
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();

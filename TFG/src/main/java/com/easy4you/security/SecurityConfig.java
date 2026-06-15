@@ -47,17 +47,19 @@ public class SecurityConfig {
     http
         .securityMatcher(new OrRequestMatcher(
             new AntPathRequestMatcher("/admin/**"),
-            new AntPathRequestMatcher("/dev/**"),
             new AntPathRequestMatcher("/login"),
             new AntPathRequestMatcher("/logout")
         ))
-        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
+        .headers(h -> h
+            .contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy()))
+            .frameOptions(f -> f.deny())
+            .contentTypeOptions(c -> {})
+        )
         .authenticationProvider(authenticationProvider())
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers(
                         new AntPathRequestMatcher("/login"),
-                        new AntPathRequestMatcher("/dev/**"),
                         new AntPathRequestMatcher("/css/**"),
                         new AntPathRequestMatcher("/js/**"),
                         new AntPathRequestMatcher("/images/**"),
@@ -90,7 +92,11 @@ public class SecurityConfig {
         .securityMatcher(new AntPathRequestMatcher("/api/**"))
         .csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
-        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
+        .headers(h -> h
+            .contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy()))
+            .frameOptions(f -> f.deny())
+            .contentTypeOptions(c -> {})
+        )
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authenticationProvider(authenticationProvider())
         .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -116,13 +122,17 @@ public class SecurityConfig {
         .securityMatcher(new AntPathRequestMatcher("/app/**"))
         .csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
-        .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy())))
+        .headers(h -> h
+            .contentSecurityPolicy(csp -> csp.policyDirectives(cspDevPolicy()))
+            .frameOptions(f -> f.deny())
+            .contentTypeOptions(c -> {})
+        )
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authenticationProvider(authenticationProvider())
         .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
         .exceptionHandling(ex -> ex
             .authenticationEntryPoint((request, response, authException) ->
-                response.sendRedirect("/app/login?expired=1"))
+                response.sendRedirect("/app/login"))
         )
         .authorizeHttpRequests(
             auth ->

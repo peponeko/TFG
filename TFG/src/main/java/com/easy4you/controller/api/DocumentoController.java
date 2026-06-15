@@ -61,27 +61,14 @@ public class DocumentoController {
 
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
 
-    List<Documento> documentos;
-    if (temaId != null) {
-      documentos =
-          documentoService.listarPorTemaId(temaId).stream()
-              .filter(d -> d.getUsuario() != null && usuarioActual.getId().equals(d.getUsuario().getId()))
-              .toList();
-    } else if (asignaturaId != null) {
-      documentos = documentoService.listarPorAsignaturaIdDeUsuario(usuarioActual.getId(), asignaturaId);
-    } else {
-      documentos = documentoService.listarPorUsuarioId(usuarioActual.getId());
-    }
-
-    List<DocumentoResponseDTO> response = documentos.stream().map(DocumentoMapper::toResponse).toList();
-    return ResponseEntity.ok(response);
+    return ResponseEntity.ok(
+        documentoService.listarItemsDto(usuarioActual.getId(), temaId, asignaturaId));
   }
 
   @GetMapping("/{id}")
   public ResponseEntity<DocumentoResponseDTO> obtener(@PathVariable Long id) {
     Usuario usuarioActual = authenticatedUserService.requireUsuarioActual();
-    Documento documento = documentoService.obtenerPorIdDeUsuario(usuarioActual.getId(), id);
-    return ResponseEntity.ok(DocumentoMapper.toResponse(documento));
+    return ResponseEntity.ok(documentoService.obtenerResponsePorIdDeUsuario(usuarioActual.getId(), id));
   }
 
   @GetMapping("/{id}/estado")

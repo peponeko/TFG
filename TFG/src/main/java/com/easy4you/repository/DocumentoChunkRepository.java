@@ -30,13 +30,23 @@ public interface DocumentoChunkRepository extends JpaRepository<DocumentoChunk, 
    * Usa MATCH ... AGAINST en modo natural language.
    * Ordena por SCORE de relevancia (desc) y luego por índice de chunk.
    */
-  @Query(value = """
-      SELECT dc.*, MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE) AS relevance_score
-      FROM documento_chunk dc
-      WHERE dc.documento_id IN :documentoIds
-        AND MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
-      ORDER BY relevance_score DESC, dc.indice_chunk ASC
-      """, nativeQuery = true)
+  @Query(
+      value =
+          """
+          SELECT dc.*
+          FROM documento_chunk dc
+          WHERE dc.documento_id IN (:documentoIds)
+            AND MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
+          ORDER BY MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE) DESC, dc.indice_chunk ASC
+          """,
+      countQuery =
+          """
+          SELECT COUNT(*)
+          FROM documento_chunk dc
+          WHERE dc.documento_id IN (:documentoIds)
+            AND MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
+          """,
+      nativeQuery = true)
   Page<DocumentoChunk> searchFullText(
       @Param("documentoIds") List<Long> documentoIds,
       @Param("query") String query,
@@ -45,12 +55,21 @@ public interface DocumentoChunkRepository extends JpaRepository<DocumentoChunk, 
   /**
    * Búsqueda FULLTEXT sin filtro de documentos (para búsquedas globales).
    */
-  @Query(value = """
-      SELECT dc.*, MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE) AS relevance_score
-      FROM documento_chunk dc
-      WHERE MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
-      ORDER BY relevance_score DESC, dc.indice_chunk ASC
-      """, nativeQuery = true)
+  @Query(
+      value =
+          """
+          SELECT dc.*
+          FROM documento_chunk dc
+          WHERE MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
+          ORDER BY MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE) DESC, dc.indice_chunk ASC
+          """,
+      countQuery =
+          """
+          SELECT COUNT(*)
+          FROM documento_chunk dc
+          WHERE MATCH(dc.texto) AGAINST(:query IN NATURAL LANGUAGE MODE)
+          """,
+      nativeQuery = true)
   Page<DocumentoChunk> searchFullTextGlobal(
       @Param("query") String query,
       Pageable pageable);

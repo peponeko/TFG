@@ -1,5 +1,6 @@
 package com.easy4you.model.entity;
 
+import jakarta.persistence.Basic;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -42,6 +43,10 @@ public class Tema extends BaseAuditableEntity {
   @JoinColumn(name = "asignatura_id", nullable = false)
   private Asignatura asignatura;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "unidad_tematica_id")
+  private UnidadTematica unidadTematica;
+
   @Column(name = "trimestre")
   private Integer trimestre;
 
@@ -50,6 +55,7 @@ public class Tema extends BaseAuditableEntity {
   private String titulo;
 
   @Lob
+  @Basic(fetch = FetchType.LAZY)
   @Column(name = "descripcion")
   private String descripcion;
 

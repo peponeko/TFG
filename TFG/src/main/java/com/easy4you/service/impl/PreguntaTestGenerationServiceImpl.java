@@ -166,6 +166,7 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
   }
 
   @Async
+  @Transactional
   @Override
   public void generarParaDocumentoAsync(Long usuarioId, Long documentoId) {
     try {
@@ -173,13 +174,7 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
       updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.LISTO, null);
     } catch (Exception ex) {
       log.error("Error generando preguntas test: documentoId={}, usuarioId={}", documentoId, usuarioId, ex);
-      updateDocumentoEstado(
-          usuarioId,
-          documentoId,
-          EstadoProcesadoDocumento.ERROR,
-          ex.getMessage() == null || ex.getMessage().isBlank()
-              ? "No se pudieron generar preguntas test"
-              : ex.getMessage());
+      updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.PROCESADO, null);
     }
   }
 
@@ -231,8 +226,9 @@ public class PreguntaTestGenerationServiceImpl implements PreguntaTestGeneration
     String prompt = PromptTemplates.formatPreguntasTest(input, NUM_PREGUNTAS);
     // Gemini JSON Mode → devuelve JSON puro, sin necesidad de JsonExtractor
     String jsonArray = aiService.generarJson(prompt);
-    if (jsonArray == null || jsonArray.isBlank()) {
-      throw new ServiceUnavailableException("La IA no devolvió un JSON válido para preguntas test");
+    if (jsonArray == null || jsonArray.isBlank() || "[]".equals(jsonArray.trim())) {
+      throw new ServiceUnavailableException(
+          "La IA no devolvió preguntas válidas. Comprueba OPENAI_API_KEY y el modelo configurado.");
     }
 
     List<PreguntaGenerated> generated = parsePreguntas(jsonArray);

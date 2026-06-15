@@ -2,6 +2,7 @@ package com.easy4you.service.ai.impl;
 
 import com.easy4you.config.AiProperties;
 import com.easy4you.service.ai.AiService;
+import com.easy4you.util.TextUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -30,7 +31,7 @@ public class OpenAiServiceImpl implements AiService {
 
   private static final int DEFAULT_MAX_TOKENS = 800;
   private static final String FALLBACK_CHAT =
-      "Ahora mismo la IA no está disponible. Para la demo, puedo ayudarte igualmente: revisa el texto extraído del documento y formula una pregunta más concreta.";
+      "Ahora mismo el servicio no está disponible. Puedes revisar el texto extraído del documento y hacer una pregunta más concreta.";
 
   private final AiProperties aiProperties;
   private final ObjectMapper objectMapper;
@@ -48,7 +49,7 @@ public class OpenAiServiceImpl implements AiService {
           prompt,
           Math.max(64, maxTokens));
     } catch (Exception ex) {
-      log.warn("OpenAI no disponible, activando fallback: {}", ex.getMessage());
+      log.warn("Proveedor no disponible, activando fallback: {}", ex.getMessage());
       return FALLBACK_CHAT;
     }
   }
@@ -69,7 +70,7 @@ public class OpenAiServiceImpl implements AiService {
     try {
       return callChatCompletions(system, user.toString(), Math.max(64, maxTokens));
     } catch (Exception ex) {
-      log.warn("OpenAI no disponible, activando fallback: {}", ex.getMessage());
+      log.warn("Proveedor no disponible, activando fallback: {}", ex.getMessage());
       return FALLBACK_CHAT;
     }
   }
@@ -80,22 +81,19 @@ public class OpenAiServiceImpl implements AiService {
       return "[]";
     }
     try {
+      int maxTokens = aiProperties.getMaxTokensFlashcards() > 0 ? aiProperties.getMaxTokensFlashcards() : 4096;
       String out =
           callChatCompletions(
-              "Devuelve exclusivamente JSON válido (sin markdown, sin texto adicional). Responde en español si hay campos de texto.",
+              "Devuelve exclusivamente un array JSON válido (sin markdown, sin texto adicional). Responde en español si hay campos de texto.",
               prompt,
-              4096);
-      // Si devolviera basura, al menos no rompemos el frontend: fallback JSON.
-      if (out == null) {
+              maxTokens);
+      if (out == null || out.isBlank()) {
         return "[]";
       }
-      String trimmed = out.trim();
-      if (trimmed.startsWith("```")) {
-        return "[]";
-      }
-      return trimmed;
+      String json = TextUtils.extractJsonArray(out);
+      return json.isBlank() ? "[]" : json;
     } catch (Exception ex) {
-      log.warn("OpenAI no disponible (JSON), activando fallback: {}", ex.getMessage());
+      log.warn("Proveedor no disponible (JSON), activando fallback: {}", ex.getMessage());
       return "[]";
     }
   }
@@ -111,10 +109,10 @@ public class OpenAiServiceImpl implements AiService {
     String model = aiProperties.getOpenai().getModel();
 
     if (apiKey == null || apiKey.isBlank()) {
-      throw new IllegalStateException("OpenAI API key no configurada (ai.openai.api-key)");
+      throw new IllegalStateException("API key no configurada (ai.openai.api-key)");
     }
     if (model == null || model.isBlank()) {
-      model = "gpt-4o-mini";
+      model = "gpt-4o";
     }
 
     Map<String, Object> body = new LinkedHashMap<>();
@@ -129,26 +127,25 @@ public class OpenAiServiceImpl implements AiService {
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setBearerAuth(apiKey);
 
-    // Timeout simple a nivel HTTP client (RestTemplate por defecto usa timeouts del JDK/HttpUrlConnection);
-    // mantenemos la implementación simple para DAM.
+    // Implementación simple con RestTemplate.
     HttpEntity<String> entity = new HttpEntity<>(json, headers);
 
     ResponseEntity<String> response;
     try {
       response = restTemplate.postForEntity(OPENAI_CHAT_COMPLETIONS_URL, entity, String.class);
     } catch (RestClientException ex) {
-      throw new RestClientException("Error llamando a OpenAI: " + ex.getMessage(), ex);
+      throw new RestClientException("Error llamando al proveedor: " + ex.getMessage(), ex);
     }
 
     String responseBody = response.getBody();
     if (responseBody == null || responseBody.isBlank()) {
-      throw new IllegalStateException("OpenAI devolvió una respuesta vacía");
+      throw new IllegalStateException("El proveedor devolvió una respuesta vacía");
     }
 
     JsonNode root = objectMapper.readTree(responseBody);
     JsonNode content = root.path("choices").path(0).path("message").path("content");
     if (content.isMissingNode() || content.isNull()) {
-      throw new IllegalStateException("OpenAI no devolvió contenido utilizable");
+      throw new IllegalStateException("El proveedor no devolvió contenido utilizable");
     }
     String out = content.asText("");
     return out == null ? "" : out.trim();
@@ -159,7 +156,7 @@ public class OpenAiServiceImpl implements AiService {
     if (key != null && !key.isBlank()) {
       return key;
     }
-    // Fallback para demos en Windows/IDE: a veces la variable de entorno no llega al proceso.
+    // Fallback: a veces la variable de entorno no llega al proceso.
     String env = System.getenv("OPENAI_API_KEY");
     return env == null ? "" : env.trim();
   }

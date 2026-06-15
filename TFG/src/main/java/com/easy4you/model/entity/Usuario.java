@@ -63,6 +63,9 @@ public class Usuario extends BaseAuditableEntity {
   @Column(name = "ultimo_login")
   private LocalDateTime ultimoLogin;
 
+  @Column(name = "nivel_estudio", length = 50)
+  private String nivelEstudio;
+
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
       name = "usuario_rol",

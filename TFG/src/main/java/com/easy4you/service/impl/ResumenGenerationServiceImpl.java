@@ -96,6 +96,7 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
   }
 
   @Async
+  @Transactional
   @Override
   public void generarResumenDocumentoAsync(Long usuarioId, Long documentoId) {
     try {
@@ -103,13 +104,7 @@ public class ResumenGenerationServiceImpl implements ResumenGenerationService {
       updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.LISTO, null);
     } catch (Exception ex) {
       log.error("Error generando resumen: documentoId={}, usuarioId={}", documentoId, usuarioId, ex);
-      updateDocumentoEstado(
-          usuarioId,
-          documentoId,
-          EstadoProcesadoDocumento.ERROR,
-          ex.getMessage() == null || ex.getMessage().isBlank()
-              ? "No se pudo generar el resumen"
-              : ex.getMessage());
+      updateDocumentoEstado(usuarioId, documentoId, EstadoProcesadoDocumento.PROCESADO, null);
     }
   }
 
